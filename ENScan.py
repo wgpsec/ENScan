@@ -74,7 +74,7 @@ class EIScan(object):
             res = resp.text
         except Exception as e:
             print("【失败】自动重连")
-            if t > len(self.user_proxy):
+            if t > len(self.user_proxy) / 2:
                 self.get_proxy()
             res = self.get_req("", url, referer, redirect, t + 1)
         return res
@@ -177,6 +177,7 @@ class EIScan(object):
             page_count = data['pageCount']
             if page_count > 1:
                 for t in range(1, page_count + 1):
+                    print(str(t) + "/" + str(page_count))
                     url += "&p=" + str(t) + "&page=" + str(t)
                     content = self.get_req('./company_tmp/' + pid + 'aiqi_detail.html', url, url_prefix, True)
                     res_s_data = json.loads(content)['data']
@@ -189,7 +190,7 @@ class EIScan(object):
         s_info = self.get_company_info_user(pid)
         print("----基本信息----")
         print(s_info)
-        if s_info['openStatus'] == '注销':
+        if s_info['openStatus'] == '注销' or s_info['openStatus'] == '吊销':
             print(s_info['legalPerson'])
         else:
             for t in s_info:
