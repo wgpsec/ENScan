@@ -50,12 +50,11 @@ class EIScan(object):
             pt_s = {
                 "https": "http://" + p_ip['proxy'],
             }
-            print(p_ip['proxy'])
             try:
                 p = requests.get('https://icanhazip.com', verify=False,
                                  proxies=pt_s, timeout=3)
                 if p.status_code == 200:
-                    print(p_ip['proxy'] + " ok")
+                    print(p_ip['proxy'] + " 【ok】")
                     self.user_proxy.append(pt_s)
             except:
                 requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(p_ip['proxy']))
@@ -74,8 +73,7 @@ class EIScan(object):
                                     allow_redirects=redirect)
             res = resp.text
         except Exception as e:
-            print(e)
-            print("ERROR")
+            print("【失败】自动重连")
             if t > len(self.user_proxy):
                 self.get_proxy()
             res = self.get_req("", url, referer, redirect, t + 1)
@@ -117,8 +115,7 @@ class EIScan(object):
         if res:
             return res
         else:
-            self.access_pid(pid, url_prefix)
-        return res
+            return self.access_pid(pid, url_prefix)
 
     def parse_detail(self, content):
         tag_2 = '/* eslint-enable */</script> <script type="text/javascript"'
@@ -137,24 +134,30 @@ class EIScan(object):
 
     def get_company_info_user(self, pid):
         item_detail = self.access_pid(pid, "")
+        print("==ITEM==")
         print(item_detail)
+        print("===ITEM END==")
         info = {}
         if item_detail:
-            info["telephone"] = item_detail["telephone"]
+            # 基本信息获取
             info["email"] = item_detail["email"]
             info["addr"] = item_detail["addr"]
             info["website"] = item_detail["website"]
             info["legalPerson"] = item_detail["legalPerson"]
             info["entName"] = item_detail["entName"]
             info["openStatus"] = item_detail["openStatus"]
-            info["invest"] = item_detail['newTabs'][0]['children'][7]['total']
-            info["hold"] = item_detail['newTabs'][0]['children'][8]['total']
-            info["branch"] = item_detail['newTabs'][0]['children'][12]['total']
-            info["icpNum"] = item_detail['newTabs'][2]['children'][0]['total']
-            info["copyrightNum"] = item_detail['newTabs'][2]['children'][3]['total']
-            info["microblog"] = item_detail['newTabs'][4]['children'][7]['total']
-            info["wechatoa"] = item_detail['newTabs'][4]['children'][8]['total']
-            info["appinfo"] = item_detail['newTabs'][4]['children'][9]['total']
+            if item_detail['newTabs'][1]['name'] == '上市信息':
+                l = 1
+            else:
+                l = 0
+            info["invest"] = item_detail['newTabs'][0 + l]['children'][7]['total']
+            info["hold"] = item_detail['newTabs'][0 + l]['children'][8]['total']
+            info["branch"] = item_detail['newTabs'][0 + l]['children'][12]['total']
+            info["icpNum"] = item_detail['newTabs'][2 + l]['children'][0]['total']
+            info["copyrightNum"] = item_detail['newTabs'][2 + l]['children'][3]['total']
+            info["microblog"] = item_detail['newTabs'][4 + l]['children'][7]['total']
+            info["wechatoa"] = item_detail['newTabs'][4 + l]['children'][8]['total']
+            info["appinfo"] = item_detail['newTabs'][4 + l]['children'][9]['total']
         return info
 
     def get_info_list(self, pid, types):
@@ -184,21 +187,41 @@ class EIScan(object):
 
     def get_company_c(self, pid):
         s_info = self.get_company_info_user(pid)
-        print("==基本信息==")
+        print("----基本信息----")
         print(s_info)
-        for t in s_info:
-            print(t + ":" + str(s_info[t]))
-        if s_info['icpNum'] > 0:
-            print("===ICP备案信息===")
-            icp_info = self.get_info_list(pid, "detail/icpinfoAjax")
-            for icp_item in icp_info:
-                print(icp_item)
-        if s_info['copyrightNum'] > 0:
-            print("===软件著作===")
-            copyright_info = self.get_info_list(pid, "detail/copyrightAjax")
-            for copy_item in copyright_info:
-                print(copy_item['softwareName'])
-                print(copy_item['detail'])
+        if s_info['openStatus'] == '注销':
+            print(s_info['legalPerson'])
+        else:
+            for t in s_info:
+                print(t + ":" + str(s_info[t]))
+            if s_info['icpNum'] > 0:
+                print("-ICP备案-")
+                icp_info = self.get_info_list(pid, "detail/icpinfoAjax")
+                for icp_item in icp_info:
+                    print(icp_item)
+            if s_info['appinfo'] > 0:
+                print("-APP信息-")
+                info_res = self.get_info_list(pid, "c/appinfoAjax")
+                for info_item in info_res:
+                    print(info_item)
+            if s_info['microblog'] > 0:
+                print("-微博信息-")
+                info_res = self.get_info_list(pid, "c/microblogAjax")
+                for info_item in info_res:
+                    print(info_item)
+            if s_info['wechatoa'] > 0:
+                print("-微信公众号信息-")
+                info_res = self.get_info_list(pid, "c/wechatoaAjax")
+                for info_item in info_res:
+                    print(info_item)
+            if s_info['copyrightNum'] > 0:
+                print("-软件著作-")
+                copyright_info = self.get_info_list(pid, "detail/copyrightAjax")
+                for copy_item in copyright_info:
+                    print(copy_item['softwareName'])
+                    print(copy_item['detail'])
+            print("-XX-基本信息END-XX-")
+        return s_info
 
     def get_cm_if(self, name, t=0):
         company = name
@@ -206,12 +229,13 @@ class EIScan(object):
         url_a = 'https://aiqicha.baidu.com/s?q=' + company + '&t=0'
         content = self.get_req('./aiqi.html', url_a, url_prefix, False)
         item = self.parse_index(content)
+        print(t)
         if t > 3:
             return None
         if item:
             return item
         else:
-            self.get_cm_if(name, t + 1)
+            return self.get_cm_if(name, t + 1)
 
     def get_company_info(self, name):
         print("Start")
@@ -226,7 +250,7 @@ class EIScan(object):
             # print(relations_info)
             for s in relations_info:
                 print(s['entName'] + " " + s['openStatus'])
-                self.get_company_c(s['pid'])
+                # self.get_company_c(s['pid'])
             print("===控股公司===")
             holds_info = self.get_info_list(pid, "detail/holdsAjax")
             for s in holds_info:
@@ -236,12 +260,14 @@ class EIScan(object):
             holds_info = self.get_info_list(pid, "detail/investajax")
             for s in holds_info:
                 print(s['entName'] + " 状态：" + s['openStatus'] + " 投资比例：" + s['regRate'])
+                if s['regRate'] != '-':
+                    if float(s['regRate'].replace("%", "")) > 50:
+                        self.get_company_c(s['pid'])
         else:
             print("NO_INDEX_ERROR")
             return "NO_INDEX"
 
     def main(self):
-        self.get_proxy()
         print("name")
         company = input("")
         info = self.get_company_info(company)
@@ -250,4 +276,5 @@ class EIScan(object):
 
 if __name__ == '__main__':
     Scan = EIScan()
+    Scan.get_proxy()
     Scan.main()
