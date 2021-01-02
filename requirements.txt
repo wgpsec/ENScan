@@ -1,0 +1,2 @@
+certifi==2020.12.5
+wincertstore==0.2
