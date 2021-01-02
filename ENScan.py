@@ -5,7 +5,6 @@ import requests
 import random
 import re
 from flask import Flask, request
-from tqdm import tqdm
 
 requests.packages.urllib3.disable_warnings()
 
@@ -262,7 +261,7 @@ class EIScan(object):
         else:
             return self.get_cm_if(name, t + 1)
 
-    def get_company_info(self, name, pbar):
+    def get_company_info(self, name):
         print("----开始查询----")
         item = self.get_cm_if(name)
         if item:
@@ -271,7 +270,7 @@ class EIScan(object):
             print("【根据关键词查询到公司】 " + my[1])
             pid = my[0]
             self.c_data['info'] = self.get_company_c(pid)
-            pbar.update(30)
+
             print("===查分支机构===")
             relations_info = self.get_info_list(pid, "detail/branchajax")
             self.c_data['branch'] = relations_info
@@ -286,7 +285,7 @@ class EIScan(object):
             #     print(s['entName'])
             #     holds_info_data.append(self.get_company_c(s['pid']))
             # self.c_data['holds'] = holds_info_data
-            pbar.update(30)
+
             print("===对外投资===")
             invest_data = []
             holds_info = self.get_info_list(pid, "detail/investajax")
@@ -304,10 +303,9 @@ class EIScan(object):
                     "data": holds_info_data,
                 })
             self.c_data['invest'] = invest_data
-            pbar.update(40)
+
         else:
             print("NO_INDEX_ERROR")
-            pbar.update(100)
             return "NO_INDEX"
 
     def check_name(self, name):
@@ -320,12 +318,11 @@ class EIScan(object):
 
     def main(self, name=None):
         print("name")
-        pbar = tqdm(total=100)
         if name != None:
             company = name
         else:
             company = input("")
-        info = self.get_company_info(company, pbar)
+        info = self.get_company_info(company)
         print(self.c_data)
         for s in self.icp_list:
             print(s['siteName'])
