@@ -1,20 +1,28 @@
 #!env python3
 import json
 import time
+import logging
 import requests
 import random
 import re
+
+from colorama import Fore
 from flask import Flask, request
+from tqdm import tqdm
 
 requests.packages.urllib3.disable_warnings()
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 class EIScan(object):
     def __init__(self):
-        self.user_proxy = [{}]
+        self.user_proxy = []
         self.icp_list = []
         self.data = []
         self.c_data = {}
+        self.p_bar = None
 
     def build_headers(self, referer):
         if not referer:
@@ -44,24 +52,28 @@ class EIScan(object):
         return headers
 
     def get_proxy(self):
-        self.user_proxy = [{}]
-        print("====GET PROXY===")
+        self.user_proxy = []
+        logger.info("Get Proxy")
         test_p = requests.get('http://proxy.ts.wgpsec.org/get_all/', timeout=3)
         pr_ip = json.loads(test_p.text)
-        print(len(pr_ip))
+        logger.info("Get Proxy Pool {}".format(len(pr_ip)))
+        proxy_bar = tqdm(total=len(pr_ip), desc="【Proxy】",
+                         bar_format='{l_bar}%s{bar}%s{r_bar}' % (Fore.BLUE, Fore.RESET))
         for p_ip in pr_ip:
             pt_s = {
                 "https": "http://" + p_ip['proxy'],
             }
             try:
+                proxy_bar.update(1)
                 p = requests.get('https://icanhazip.com', verify=False, proxies=pt_s, timeout=3)
                 if p.status_code == 200:
                     if p.text.find(p_ip['proxy']):
-                        print(p_ip['proxy'] + " 【ok】")
+                        logger.info(p_ip['proxy'] + " 【ok】")
                         self.user_proxy.append(pt_s)
             except:
                 requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(p_ip['proxy']))
-        print("====HAVE {} PROXY===".format(len(self.user_proxy)))
+        proxy_bar.close()
+        logger.info("====HAVE {} PROXY===".format(len(self.user_proxy)))
         return self.user_proxy
 
     def get_req(self, url, referer, redirect, is_json=False, t=0):
@@ -104,7 +116,7 @@ class EIScan(object):
         idx_1 = content.find(tag_1)
         idx_2 = content.find(tag_2)
 
-        if (idx_2 > idx_1):
+        if idx_2 > idx_1:
 
             mystr = content[idx_1 + len(tag_1): idx_2].strip()
             len_str = len(mystr)
@@ -262,22 +274,22 @@ class EIScan(object):
             return self.get_cm_if(name, t + 1)
 
     def get_company_info(self, name):
-        print("----开始查询----")
+        logger.info("【开始查询关键词】 {}".format(name))
         item = self.get_cm_if(name)
         if item:
             my = self.get_item_name(item)
-
+            self.p_bar.update(10)
             print("【根据关键词查询到公司】 " + my[1])
             pid = my[0]
             self.c_data['info'] = self.get_company_c(pid)
-
+            self.p_bar.update(10)
             print("===查分支机构===")
             relations_info = self.get_info_list(pid, "detail/branchajax")
             self.c_data['branch'] = relations_info
             for s in relations_info:
                 print(s['entName'] + " " + s['openStatus'])
                 # self.get_company_c(s['pid'])
-
+            self.p_bar.update(10)
             # print("===控股公司===")
             # holds_info_data = []
             # holds_info = self.get_info_list(pid, "detail/holdsAjax")
@@ -285,7 +297,7 @@ class EIScan(object):
             #     print(s['entName'])
             #     holds_info_data.append(self.get_company_c(s['pid']))
             # self.c_data['holds'] = holds_info_data
-
+            self.p_bar.update(10)
             print("===对外投资===")
             invest_data = []
             holds_info = self.get_info_list(pid, "detail/investajax")
@@ -303,9 +315,9 @@ class EIScan(object):
                     "data": holds_info_data,
                 })
             self.c_data['invest'] = invest_data
-
+            self.p_bar.update(10)
         else:
-            print("NO_INDEX_ERROR")
+            logger.warning("【未查询到关键词】 {}".format(name))
             return "NO_INDEX"
 
     def check_name(self, name):
@@ -317,47 +329,30 @@ class EIScan(object):
             return my
 
     def main(self, name=None):
-        print("name")
-        if name != None:
+        logger.info("Start print log")
+        if name is not None:
             company = name
         else:
+            print("==== Need Keyword ====")
             company = input("")
+        self.p_bar = tqdm(total=100)
+        if len(self.user_proxy) < 1:
+            self.get_proxy()
+        self.p_bar.update(10)
         info = self.get_company_info(company)
-        print(self.c_data)
-        for s in self.icp_list:
-            print(s['siteName'])
-            print(s['homeSite'])
-            print(s['icpNo'])
-            for t in s['domain']:
-                print(t)
-        return self.c_data
-        # self.main()
+        self.p_bar.close()
+        # for s in self.icp_list:
+        #     print(s['siteName'])
+        #     print(s['homeSite'])
+        #     print(s['icpNo'])
+        #     for t in s['domain']:
+        #         print(t)
+        if name is not None:
+            return self.c_data
+        else:
+            self.main()
 
 
 if __name__ == '__main__':
     Scan = EIScan()
-    app = Flask(__name__)
-
-
-    @app.route('/check')
-    def hello_world():
-        arg = request.args.get("name")
-
-        return str(Scan.check_name(arg))
-
-
-    @app.route('/get')
-    def getCheck():
-        arg = request.args.get("name")
-
-        return str(Scan.main(arg))
-
-
-    Scan.get_proxy()
-    app.run(port=5000)
-
-    app.run()
-
-    # 获取代理
-
-    # Scan.main()
+    Scan.main()
