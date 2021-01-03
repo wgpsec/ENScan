@@ -51,6 +51,7 @@ class EIScan(object):
         }
         return headers
 
+    # 获取代理信息
     def get_proxy(self):
         self.user_proxy = []
         logger.info("Get Proxy")
@@ -76,11 +77,13 @@ class EIScan(object):
         logger.info("====HAVE {} PROXY===".format(len(self.user_proxy)))
         return self.user_proxy
 
+    # 统一代理请求
     def get_req(self, url, referer, redirect, is_json=False, t=0):
+        # 随机获取一个代理
         proxy = random.choice(self.user_proxy)
-        res = None
+        # 判断尝试次数
         if t > 20:
-            print("ERROR")
+            logger.error("【失败】请求超过20次 {}".format(url))
             raise Exception(print("！！！尝试超过！！！ NO NO!!!"))
         try:
             if proxy:
@@ -88,27 +91,37 @@ class EIScan(object):
                                     allow_redirects=redirect,
                                     proxies=proxy)
             else:
-                resp = requests.get(url, headers=self.build_headers(referer), verify=False, timeout=8,
-                                    allow_redirects=redirect)
+                logger.error("【未检测到任何代理请求】")
+                raise Exception(print("没有获取到代理"))
+            # 判断返回为 200 成功
             if resp.status_code == 200:
+                res = resp.text
+                # 判断是否需要进行 json 校验（部分请求可能出现验证码，非预期效果）
                 if is_json:
+                    # 判断status json格式成功返回一般都带这个
                     if resp.json()['status'] != 0:
-                        print(resp.text)
+                        logger.warning("【JSON校验错误】返回内容： {} ".format(res))
+                        # 递归请求
                         return self.get_req(url, referer, redirect, is_json, t + 1)
-                    res = resp.text
+                    return res
                 else:
-                    res = resp.text
+                    return res
             else:
-                res = self.get_req(url, referer, redirect, is_json, t + 1)
-        except Exception as e:
-            print("【失败】自动重连")
+                # 如果返回不是200 OK那就继续请求看看
+                return self.get_req(url, referer, redirect, is_json, t + 1)
+        except requests.exceptions.Timeout:
+            logger.info("【代理超时自动重连】 {} ".format(proxy))
             if t > len(self.user_proxy) / 2:
                 self.get_proxy()
+            return self.get_req(url, referer, redirect, is_json, t + 1)
+        except Exception as e:
+            logger.warning("【请求错误】 {} ".format(e))
             if t > 20:
                 print("ERROR")
                 raise Exception(print("！！！尝试超过！！！" + str(e)))
-            res = self.get_req(url, referer, redirect, is_json, t + 1)
-        return res
+            return self.get_req(url, referer, redirect, is_json, t + 1)
+        finally:
+            pass
 
     def parse_index(self, content):
         tag_2 = '/* eslint-enable */</script> <script type="text/javascript"'
@@ -208,8 +221,9 @@ class EIScan(object):
             if page_count > 1:
                 for t in range(1, page_count + 1):
                     print(str(t) + "/" + str(page_count))
-                    url += "&p=" + str(t) + "&page=" + str(t)
-                    content = self.get_req(url, url_prefix, True, True)
+                    # !!!!!!!!!!!!修复参数叠加bug
+                    req_url = url + "&p=" + str(t) + "&page=" + str(t)
+                    content = self.get_req(req_url, url_prefix, True, True)
                     res_s_data = json.loads(content)['data']
                     list_data.extend(res_s_data['list'])
             else:
@@ -223,7 +237,7 @@ class EIScan(object):
         if s_info['openStatus'] == '注销' or s_info['openStatus'] == '吊销':
             print(s_info['legalPerson'])
         else:
-            c_info['s_info'] = s_info
+            c_info['basic_info'] = s_info
             for t in s_info:
                 print(t + ":" + str(s_info[t]))
             if s_info['icpNum'] > 0:
@@ -247,7 +261,7 @@ class EIScan(object):
             if s_info['wechatoa'] > 0:
                 print("-微信公众号信息-")
                 info_res = self.get_info_list(pid, "c/wechatoaAjax")
-                c_info['wechat_oa'] = info_res
+                c_info['wechat_mp'] = info_res
                 for info_item in info_res:
                     print(info_item)
             # if s_info['copyrightNum'] > 0:
@@ -259,7 +273,7 @@ class EIScan(object):
             print("-XX-基本信息END-XX-")
         return c_info
 
-    # 获取基本信息
+    # 查询关键词信息
     def get_cm_if(self, name, t=0):
         company = name
         url_prefix = 'https://www.baidu.com/'
@@ -271,6 +285,7 @@ class EIScan(object):
         if item:
             return item
         else:
+            logger.info("【关键词】{} 【失败重试】{}".format(name, t))
             return self.get_cm_if(name, t + 1)
 
     def get_company_info(self, name):
@@ -279,11 +294,12 @@ class EIScan(object):
         if item:
             my = self.get_item_name(item)
             self.p_bar.update(10)
-            print("【根据关键词查询到公司】 " + my[1])
+            logger.info("【根据关键词查询到公司】{}".format(my[1]))
             pid = my[0]
+            # 根据pid去查询公司信息
             self.c_data['info'] = self.get_company_c(pid)
             self.p_bar.update(10)
-            print("===查分支机构===")
+            logger.info("【查分支机构】{}".format(my[1]))
             relations_info = self.get_info_list(pid, "detail/branchajax")
             self.c_data['branch'] = relations_info
             for s in relations_info:
@@ -298,9 +314,10 @@ class EIScan(object):
             #     holds_info_data.append(self.get_company_c(s['pid']))
             # self.c_data['holds'] = holds_info_data
             self.p_bar.update(10)
-            print("===对外投资===")
+            logger.info("【对外投资信息】{}".format(my[1]))
             invest_data = []
             holds_info = self.get_info_list(pid, "detail/investajax")
+            self.p_bar.update(10)
             for s in holds_info:
                 holds_info_data = {}
                 print(s['entName'] + " 状态：" + s['openStatus'] + " 投资比例：" + s['regRate'])
@@ -321,35 +338,41 @@ class EIScan(object):
             return "NO_INDEX"
 
     def check_name(self, name):
+        if len(self.user_proxy) < 1:
+            self.get_proxy()
         item = self.get_cm_if(name)
         if item:
             my = self.get_item_name(item)
-
             print("【根据关键词查询到公司】 " + my[1])
             return my
+
+    def check_proxy(self):
+        # 判断代理情况
+        if len(self.user_proxy) < 1:
+            self.get_proxy()
+        if len(self.user_proxy) < 1:
+            self.get_proxy()
 
     def main(self, name=None):
         logger.info("Start print log")
         if name is not None:
             company = name
         else:
-            print("==== Need Keyword ====")
+            print("==== 【命令行模式】 Need Keyword ====")
             company = input("")
+        # 设置进度条
         self.p_bar = tqdm(total=100)
-        if len(self.user_proxy) < 1:
-            self.get_proxy()
+        # 判断代理情况
+        self.check_proxy()
+        # 判断结束代理
         self.p_bar.update(10)
         info = self.get_company_info(company)
         self.p_bar.close()
-        # for s in self.icp_list:
-        #     print(s['siteName'])
-        #     print(s['homeSite'])
-        #     print(s['icpNo'])
-        #     for t in s['domain']:
-        #         print(t)
+        # 命令模式输出
         if name is not None:
             return self.c_data
         else:
+            print(self.c_data)
             self.main()
 
 
