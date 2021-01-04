@@ -2,9 +2,12 @@
 import json
 import time
 import logging
+
+import redis
 import requests
 import random
 import re
+import _thread
 
 from colorama import Fore
 from flask import Flask, request
@@ -14,6 +17,8 @@ requests.packages.urllib3.disable_warnings()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
+r = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
 
 
 class EIScan(object):
@@ -23,6 +28,8 @@ class EIScan(object):
         self.data = []
         self.c_data = {}
         self.p_bar = None
+        self.pid = None
+        self.rKey = None
 
     def build_headers(self, referer):
         if not referer:
@@ -57,6 +64,9 @@ class EIScan(object):
         logger.info("Get Proxy")
         test_p = requests.get('http://proxy.ts.wgpsec.org/get_all/', timeout=3)
         pr_ip = json.loads(test_p.text)
+        if len(pr_ip) < 1:
+            test_p = requests.get('http://proxy.ts.wgpsec.org/get_all/', timeout=3)
+            pr_ip = json.loads(test_p.text)
         logger.info("Get Proxy Pool {}".format(len(pr_ip)))
         proxy_bar = tqdm(total=len(pr_ip), desc="【Proxy】",
                          bar_format='{l_bar}%s{bar}%s{r_bar}' % (Fore.BLUE, Fore.RESET))
@@ -66,6 +76,7 @@ class EIScan(object):
             }
             try:
                 proxy_bar.update(1)
+                # self.user_proxy.append(pt_s)
                 p = requests.get('https://icanhazip.com', verify=False, proxies=pt_s, timeout=3)
                 if p.status_code == 200:
                     if p.text.find(p_ip['proxy']):
@@ -73,6 +84,11 @@ class EIScan(object):
                         self.user_proxy.append(pt_s)
             except:
                 requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(p_ip['proxy']))
+        if len(self.user_proxy) < 1:
+            self.get_proxy()
+        if len(self.user_proxy) < 3:
+            _thread.start_new_thread(self.get_proxy, ())
+        r.set("c:im:proxy", json.dumps(self.user_proxy))
         proxy_bar.close()
         logger.info("====HAVE {} PROXY===".format(len(self.user_proxy)))
         return self.user_proxy
@@ -111,8 +127,11 @@ class EIScan(object):
                 return self.get_req(url, referer, redirect, is_json, t + 1)
         except requests.exceptions.Timeout:
             logger.info("【代理超时自动重连】 {} ".format(proxy))
-            if t > len(self.user_proxy) / 2:
-                self.get_proxy()
+            if len(self.user_proxy) > 3:
+                logger.info("【自动删除代理】 {} ".format(proxy))
+                self.user_proxy.remove(proxy)
+            if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
+                _thread.start_new_thread(self.get_proxy, ())
             return self.get_req(url, referer, redirect, is_json, t + 1)
         except Exception as e:
             logger.warning("【请求错误】 {} ".format(e))
@@ -230,7 +249,7 @@ class EIScan(object):
                 list_data = data['list']
         return list_data
 
-    def get_company_c(self, pid):
+    def get_company_c(self, pid, flag=False):
         s_info = self.get_company_info_user(pid)
         c_info = {}
         print("----基本信息----")
@@ -238,6 +257,9 @@ class EIScan(object):
             print(s_info['legalPerson'])
         else:
             c_info['basic_info'] = s_info
+            if flag:
+                self.c_data['info'] = c_info
+                r.set(self.rKey, json.dumps(self.c_data))
             for t in s_info:
                 print(t + ":" + str(s_info[t]))
             if s_info['icpNum'] > 0:
@@ -246,24 +268,36 @@ class EIScan(object):
                 c_info['icp_info'] = icp_info
                 for icp_item in icp_info:
                     print(icp_item)
+            if flag:
+                self.c_data['info'] = c_info
+                r.set(self.rKey, json.dumps(self.c_data))
             if s_info['appinfo'] > 0:
                 print("-APP信息-")
                 info_res = self.get_info_list(pid, "c/appinfoAjax")
                 c_info['app_info'] = info_res
                 for info_item in info_res:
                     print(info_item)
+            if flag:
+                self.c_data['info'] = c_info
+                r.set(self.rKey, json.dumps(self.c_data))
             if s_info['microblog'] > 0:
                 print("-微博信息-")
                 info_res = self.get_info_list(pid, "c/microblogAjax")
                 c_info['micro_blog'] = info_res
                 for info_item in info_res:
                     print(info_item)
+            if flag:
+                self.c_data['info'] = c_info
+                r.set(self.rKey, json.dumps(self.c_data))
             if s_info['wechatoa'] > 0:
                 print("-微信公众号信息-")
                 info_res = self.get_info_list(pid, "c/wechatoaAjax")
                 c_info['wechat_mp'] = info_res
                 for info_item in info_res:
                     print(info_item)
+            if flag:
+                self.c_data['info'] = c_info
+                r.set(self.rKey, json.dumps(self.c_data))
             # if s_info['copyrightNum'] > 0:
             #     print("-软件著作-")
             #     copyright_info = self.get_info_list(pid, "detail/copyrightAjax")
@@ -288,66 +322,66 @@ class EIScan(object):
             logger.info("【关键词】{} 【失败重试】{}".format(name, t))
             return self.get_cm_if(name, t + 1)
 
-    def get_company_info(self, name):
-        logger.info("【开始查询关键词】 {}".format(name))
-        item = self.get_cm_if(name)
-        if item:
-            my = self.get_item_name(item)
-            self.p_bar.update(10)
-            logger.info("【根据关键词查询到公司】{}".format(my[1]))
-            pid = my[0]
-            # 根据pid去查询公司信息
-            self.c_data['info'] = self.get_company_c(pid)
-            self.p_bar.update(10)
-            logger.info("【查分支机构】{}".format(my[1]))
-            relations_info = self.get_info_list(pid, "detail/branchajax")
-            self.c_data['branch'] = relations_info
-            for s in relations_info:
-                print(s['entName'] + " " + s['openStatus'])
-                # self.get_company_c(s['pid'])
-            self.p_bar.update(10)
-            # print("===控股公司===")
-            # holds_info_data = []
-            # holds_info = self.get_info_list(pid, "detail/holdsAjax")
-            # for s in holds_info:
-            #     print(s['entName'])
-            #     holds_info_data.append(self.get_company_c(s['pid']))
-            # self.c_data['holds'] = holds_info_data
-            self.p_bar.update(10)
-            logger.info("【对外投资信息】{}".format(my[1]))
-            invest_data = []
-            holds_info = self.get_info_list(pid, "detail/investajax")
-            self.p_bar.update(10)
-            for s in holds_info:
-                holds_info_data = {}
-                print(s['entName'] + " 状态：" + s['openStatus'] + " 投资比例：" + s['regRate'])
-                if s['regRate'] != '-':
-                    if float(s['regRate'].replace("%", "")) > 50:
-                        holds_info_data = self.get_company_c(s['pid'])
-                        print(holds_info_data)
-                invest_data.append({
-                    "entName": s['entName'],
-                    "openStatus": s['openStatus'],
-                    "regRate": s['regRate'],
-                    "data": holds_info_data,
-                })
-            self.c_data['invest'] = invest_data
-            self.p_bar.update(10)
-        else:
-            logger.warning("【未查询到关键词】 {}".format(name))
-            return "NO_INDEX"
+    def get_company_info(self, pid):
+        # 根据pid去查询公司信息
+        self.c_data['info'] = self.get_company_c(pid, True)
+        r.set(self.rKey, json.dumps(self.c_data))
+        self.p_bar.update(10)
+        print(self.c_data['info'])
+        en_name = self.c_data['info']['basic_info']['entName']
+        logger.info("【查分支机构】{}".format(en_name))
+        relations_info = self.get_info_list(pid, "detail/branchajax")
+        self.c_data['branch'] = relations_info
+        r.set(self.rKey, json.dumps(self.c_data))
+        for s in relations_info:
+            print(s['entName'] + " " + s['openStatus'])
+            # self.get_company_c(s['pid'])
+        self.p_bar.update(10)
+        # print("===控股公司===")
+        # holds_info_data = []
+        # holds_info = self.get_info_list(pid, "detail/holdsAjax")
+        # for s in holds_info:
+        #     print(s['entName'])
+        #     holds_info_data.append(self.get_company_c(s['pid']))
+        # self.c_data['holds'] = holds_info_data
+        self.p_bar.update(10)
+        logger.info("【对外投资信息】{}".format(en_name))
+        invest_data = []
+        holds_info = self.get_info_list(pid, "detail/investajax")
+        self.p_bar.update(10)
+        for s in holds_info:
+            holds_info_data = {}
+            print(s['entName'] + " 状态：" + s['openStatus'] + " 投资比例：" + s['regRate'])
+            if s['regRate'] != '-':
+                if float(s['regRate'].replace("%", "")) > 50:
+                    holds_info_data = self.get_company_c(s['pid'])
+                    print(holds_info_data)
+            invest_data.append({
+                "entName": s['entName'],
+                "openStatus": s['openStatus'],
+                "regRate": s['regRate'],
+                "data": holds_info_data,
+            })
+        self.c_data['invest'] = invest_data
+        r.set(self.rKey, json.dumps(self.c_data))
+        self.p_bar.update(10)
 
     def check_name(self, name):
-        if len(self.user_proxy) < 1:
-            self.get_proxy()
+        self.check_proxy()
+        logger.info("【开始查询关键词】 {}".format(name))
         item = self.get_cm_if(name)
         if item:
             my = self.get_item_name(item)
             print("【根据关键词查询到公司】 " + my[1])
             return my
+        else:
+            logger.warning("【未查询到关键词】 {}".format(name))
+            return None
 
     def check_proxy(self):
         # 判断代理情况
+        if r.get("c:im:proxy") is not None:
+            self.user_proxy = json.loads(r.get("c:im:proxy"))
         if len(self.user_proxy) < 1:
             self.get_proxy()
         if len(self.user_proxy) < 1:
@@ -365,8 +399,17 @@ class EIScan(object):
         # 判断代理情况
         self.check_proxy()
         # 判断结束代理
+
         self.p_bar.update(10)
-        info = self.get_company_info(company)
+        pid = self.check_name(company)[0]
+        if pid is not None:
+            self.pid = pid
+            self.rKey = "c:im:info:" + self.pid
+            if r.get(self.rKey) is None:
+                self.get_company_info(pid)
+            else:
+                self.c_data = r.get(self.rKey)
+
         self.p_bar.close()
         # 命令模式输出
         if name is not None:
