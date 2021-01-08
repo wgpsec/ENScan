@@ -1,4 +1,6 @@
 #!env python3
+import csv
+import datetime
 import json
 import time
 import logging
@@ -17,8 +19,11 @@ requests.packages.urllib3.disable_warnings()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
-r = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
+
+isRedis = True
+if isRedis:
+    pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
+    r = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
 
 
 class EIScan(object):
@@ -29,7 +34,21 @@ class EIScan(object):
         self.c_data = {}
         self.p_bar = None
         self.pid = None
+        self.c_name = None
         self.rKey = None
+        self.enInfo = {
+            "basicInfo": {},
+            "icpList": [],
+            "emailInfo": [],
+            "appInfo": [],
+            "socialInfo": [],
+            "legalPersonInfo": []
+        }
+
+    def set_redis(self):
+        if isRedis:
+            r.set(self.rKey, json.dumps(self.c_data))
+        pass
 
     def build_headers(self, referer):
         if not referer:
@@ -88,7 +107,8 @@ class EIScan(object):
             self.get_proxy()
         if len(self.user_proxy) < 3:
             _thread.start_new_thread(self.get_proxy, ())
-        r.set("c:im:proxy", json.dumps(self.user_proxy))
+        if isRedis:
+            r.set("c:im:proxy", json.dumps(self.user_proxy))
         proxy_bar.close()
         logger.info("====HAVE {} PROXY===".format(len(self.user_proxy)))
         return self.user_proxy
@@ -133,6 +153,16 @@ class EIScan(object):
             if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
                 _thread.start_new_thread(self.get_proxy, ())
             return self.get_req(url, referer, redirect, is_json, t + 1)
+        except requests.exceptions.ProxyError:
+            logger.info("【代理错误】 {} ".format(proxy))
+            requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(proxy['https']))
+            if len(self.user_proxy) > 3:
+                logger.info("【自动删除代理】 {} ".format(proxy))
+                self.user_proxy.remove(proxy)
+            if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
+                _thread.start_new_thread(self.get_proxy, ())
+            return self.get_req(url, referer, redirect, is_json, t + 1)
+
         except Exception as e:
             logger.warning("【请求错误】 {} ".format(e))
             if t > 20:
@@ -220,6 +250,15 @@ class EIScan(object):
             info["microblog"] = item_detail['newTabs'][4 + l]['children'][7]['total']
             info["wechatoa"] = item_detail['newTabs'][4 + l]['children'][8]['total']
             info["appinfo"] = item_detail['newTabs'][4 + l]['children'][9]['total']
+            email_info = {
+                "entName": info["entName"],
+                "email": info["email"],
+                "legalPerson": info["legalPerson"],
+                "telephone": info["telephone"],
+            }
+            self.enInfo['emailInfo'].append(info["email"])
+            self.enInfo['legalPersonInfo'].append(email_info)
+
         return info
 
     def get_info_list(self, pid, types):
@@ -259,7 +298,7 @@ class EIScan(object):
             c_info['basic_info'] = s_info
             if flag:
                 self.c_data['info'] = c_info
-                r.set(self.rKey, json.dumps(self.c_data))
+                self.set_redis()
             for t in s_info:
                 print(t + ":" + str(s_info[t]))
             if s_info['icpNum'] > 0:
@@ -267,19 +306,30 @@ class EIScan(object):
                 icp_info = self.get_info_list(pid, "detail/icpinfoAjax")
                 c_info['icp_info'] = icp_info
                 for icp_item in icp_info:
+                    for domain_item in icp_item['domain']:
+                        icp_t = {
+                            "entName": s_info['entName'],
+                            "siteName": icp_item['siteName'],
+                            "homeSite": icp_item['homeSite'][0],
+                            "icpNo": icp_item['icpNo'],
+                            "domain": domain_item,
+                        }
+                        self.enInfo["icpList"].append(icp_t)
                     print(icp_item)
             if flag:
                 self.c_data['info'] = c_info
-                r.set(self.rKey, json.dumps(self.c_data))
+                self.set_redis()
             if s_info['appinfo'] > 0:
                 print("-APP信息-")
                 info_res = self.get_info_list(pid, "c/appinfoAjax")
                 c_info['app_info'] = info_res
                 for info_item in info_res:
+                    info_item['entName'] = s_info['entName']
+                    self.enInfo["appInfo"].append(info_item)
                     print(info_item)
             if flag:
                 self.c_data['info'] = c_info
-                r.set(self.rKey, json.dumps(self.c_data))
+                self.set_redis()
             if s_info['microblog'] > 0:
                 print("-微博信息-")
                 info_res = self.get_info_list(pid, "c/microblogAjax")
@@ -288,7 +338,7 @@ class EIScan(object):
                     print(info_item)
             if flag:
                 self.c_data['info'] = c_info
-                r.set(self.rKey, json.dumps(self.c_data))
+                self.set_redis()
             if s_info['wechatoa'] > 0:
                 print("-微信公众号信息-")
                 info_res = self.get_info_list(pid, "c/wechatoaAjax")
@@ -297,7 +347,7 @@ class EIScan(object):
                     print(info_item)
             if flag:
                 self.c_data['info'] = c_info
-                r.set(self.rKey, json.dumps(self.c_data))
+                self.set_redis()
             # if s_info['copyrightNum'] > 0:
             #     print("-软件著作-")
             #     copyright_info = self.get_info_list(pid, "detail/copyrightAjax")
@@ -325,14 +375,14 @@ class EIScan(object):
     def get_company_info(self, pid):
         # 根据pid去查询公司信息
         self.c_data['info'] = self.get_company_c(pid, True)
-        r.set(self.rKey, json.dumps(self.c_data))
+        self.set_redis()
         self.p_bar.update(10)
         print(self.c_data['info'])
         en_name = self.c_data['info']['basic_info']['entName']
         logger.info("【查分支机构】{}".format(en_name))
         relations_info = self.get_info_list(pid, "detail/branchajax")
         self.c_data['branch'] = relations_info
-        r.set(self.rKey, json.dumps(self.c_data))
+        self.set_redis()
         for s in relations_info:
             print(s['entName'] + " " + s['openStatus'])
             # self.get_company_c(s['pid'])
@@ -363,7 +413,7 @@ class EIScan(object):
                 "data": holds_info_data,
             })
         self.c_data['invest'] = invest_data
-        r.set(self.rKey, json.dumps(self.c_data))
+        self.set_redis()
         self.p_bar.update(10)
 
     def check_name(self, name):
@@ -373,6 +423,8 @@ class EIScan(object):
         if item:
             my = self.get_item_name(item)
             print("【根据关键词查询到公司】 " + my[1])
+            if self.c_name is None:
+                self.c_name = my[1]
             return my
         else:
             logger.warning("【未查询到关键词】 {}".format(name))
@@ -380,12 +432,29 @@ class EIScan(object):
 
     def check_proxy(self):
         # 判断代理情况
-        if r.get("c:im:proxy") is not None:
-            self.user_proxy = json.loads(r.get("c:im:proxy"))
+        if isRedis:
+            if r.get("c:im:proxy") is not None:
+                self.user_proxy = json.loads(r.get("c:im:proxy"))
         if len(self.user_proxy) < 1:
             self.get_proxy()
         if len(self.user_proxy) < 1:
             self.get_proxy()
+
+    def export(self, res, eName):
+        with open('{}-{}.csv'.format(datetime.date.today(), eName), 'a', newline='') as csvfile:
+            fieldnames = ['域名', '站点名称', '首页', '公司名称', 'ICP备案号']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            # 注意header是个好东西
+            writer.writeheader()
+            try:
+                for item in res:
+                    writer.writerow(item)
+            except Exception as e:
+                print(f'写入csv出错\n错误原因:{e}')
+                pass
+            finally:
+                pass
+            pass
 
     def main(self, name=None):
         logger.info("Start print log")
@@ -394,6 +463,22 @@ class EIScan(object):
         else:
             print("==== 【命令行模式】 Need Keyword ====")
             company = input("")
+        self.icp_list = []
+        self.data = []
+        self.c_data = {}
+        self.p_bar = None
+        self.pid = None
+        self.c_name = None
+        self.rKey = None
+        self.enInfo = {
+            "basicInfo": {},
+            "icpList": [],
+            "emailInfo": [],
+            "appInfo": [],
+            "socialInfo": [],
+            "legalPersonInfo": []
+        }
+
         # 设置进度条
         self.p_bar = tqdm(total=100)
         # 判断代理情况
@@ -405,16 +490,36 @@ class EIScan(object):
         if pid is not None:
             self.pid = pid
             self.rKey = "c:im:info:" + self.pid
-            if r.get(self.rKey) is None:
-                self.get_company_info(pid)
+            if isRedis:
+                if r.get(self.rKey) is None or True:
+                    self.get_company_info(pid)
+                else:
+                    self.c_data = r.get(self.rKey)
             else:
-                self.c_data = r.get(self.rKey)
+                self.get_company_info(pid)
 
         self.p_bar.close()
+
         # 命令模式输出
         if name is not None:
             return self.c_data
         else:
+            print(self.enInfo)
+            email_info = set(self.enInfo['emailInfo'])
+            for item in email_info:
+                print(item)
+            res = []
+            for item in self.enInfo['icpList']:
+                print(item)
+                csv_res = {
+                    '域名': item['domain'],
+                    '站点名称': item['siteName'],
+                    '首页': item['homeSite'],
+                    '公司名称': item['entName'],
+                    'ICP备案号': item['icpNo'],
+                }
+                res.append(csv_res)
+            self.export(res, self.c_name)
             print(self.c_data)
             self.main()
 
