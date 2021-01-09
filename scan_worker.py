@@ -1,9 +1,12 @@
 import redis
 from flask import Flask, request
 from rq import Worker, Queue, Connection
+
+import Config
 import ENScan
 from multiprocessing import Pool
-conn = redis.Redis(host='127.0.0.1', password='', port=6379, db=10)  # 指定redis数据库
+pool = Config.pool
+conn = redis.Redis(connection_pool=pool, db=10)  # 指定redis数据库
 
 
 def worker(listen):

@@ -5,10 +5,12 @@ from flask import Flask, request, Response
 from rq import Queue
 from rq.job import Job
 
+import Config
 import ENScan
 
-conn = redis.Redis(host='127.0.0.1', password='', port=6379, db=10)  # 指定redis数据库
-r = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
+pool = Config.pool
+r = redis.StrictRedis(connection_pool=pool)
+conn = redis.Redis(connection_pool=pool, db=10)  # 指定redis数据库
 if __name__ == '__main__':
     app = Flask(__name__)
     Scan = ENScan.EIScan()
@@ -28,7 +30,11 @@ if __name__ == '__main__':
     @app.route('/check')
     def check_info():
         arg = request.args.get("name")
-        res_ag = Scan.check_name(arg)
+        if r.exists("c:im:keyword:" + arg):
+            res_ag = json.loads(r.get("c:im:keyword:" + arg))
+        else:
+            res_ag = Scan.check_name(arg)
+            r.set("c:im:keyword:" + arg, json.dumps(res_ag), ex=3600)
         res_info = {
             "name": res_ag[1],
             "pid": res_ag[0]
@@ -75,32 +81,41 @@ if __name__ == '__main__':
 
 
     @app.route('/getName')
-    def get_Name():
+    def get_name():
         arg = request.args.get("name")
         delS = request.args.get("del")
         print(delS)
-        res_ag = Scan.check_name(arg)
         d_info = {
             "code": 2000,
             "msg": "No",
             "data": None
         }
+        isHas = False
+        if r.exists("c:im:keyword:" + arg):
+            isHas = True
+            res_ag = json.loads(r.get("c:im:keyword:" + arg))
+        else:
+            res_ag = Scan.check_name(arg)
+            r.set("c:im:keyword:" + arg, json.dumps(res_ag), ex=3600)
+
         if res_ag is not None:
-            if r.get("c:im:info:" + res_ag[0]) is not None:
+            if (r.get("c:im:info:" + res_ag[0]) is not None) or isHas:
                 if delS is None:
+                    print(res_ag[0])
                     d_info["data"] = json.loads(r.get("c:im:info:" + res_ag[0]))
                     return Response(json.dumps(d_info), mimetype='application/json')
                 else:
                     r.delete("c:im:info:" + res_ag[0])
+                    r.delete("c:im:keyword:" + arg)
                     return Response(json.dumps(d_info), mimetype='application/json')
             else:
-                s = q.enqueue_call(Scan.main, args=(arg,))
+                s = q.enqueue_call(Scan.main, args=(res_ag[0],))
                 d_info['code'] = 5000
                 d_info['msg'] = "TaskAdd Name:"
-                d_info["data"]={
-                    "name":res_ag[1],
-                    "pid":res_ag[0],
-                    "taskId":s.id
+                d_info["data"] = {
+                    "name": res_ag[1],
+                    "pid": res_ag[0],
+                    "taskId": s.id
                 }
                 return Response(json.dumps(d_info), mimetype='application/json'), 500
         else:

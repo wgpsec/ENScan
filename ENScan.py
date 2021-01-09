@@ -15,6 +15,8 @@ from colorama import Fore
 from flask import Flask, request
 from tqdm import tqdm
 
+import Config
+
 requests.packages.urllib3.disable_warnings()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -22,13 +24,27 @@ logger = logging.getLogger(__name__)
 
 isRedis = True
 if isRedis:
-    pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
-    r = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
+    pool = Config.pool
+    r = redis.StrictRedis(connection_pool=pool)
 
 
 class EIScan(object):
     def __init__(self):
         self.user_proxy = []
+        self.isCmd = False
+        # 初始化数据
+        self.resData = {}
+        self.icp_list = []
+        self.data = []
+        self.c_data = {}
+        self.p_bar = None
+        self.pid = None
+        self.c_name = None
+        self.rKey = None
+        self.enInfo = {}
+        self.clear()
+
+    def clear(self):
         self.icp_list = []
         self.data = []
         self.c_data = {}
@@ -47,7 +63,8 @@ class EIScan(object):
 
     def set_redis(self):
         if isRedis:
-            r.set(self.rKey, json.dumps(self.c_data))
+            self.c_data['enInfo'] = self.enInfo
+            r.set(self.rKey, json.dumps(self.c_data), ex=(3600 * 24 * 7))
         pass
 
     def build_headers(self, referer):
@@ -78,8 +95,9 @@ class EIScan(object):
         return headers
 
     # 获取代理信息
-    def get_proxy(self):
-        self.user_proxy = []
+    def get_proxy(self, is_add=False):
+        if not is_add:
+            self.user_proxy = []
         logger.info("Get Proxy")
         test_p = requests.get('http://proxy.ts.wgpsec.org/get_all/', timeout=3)
         pr_ip = json.loads(test_p.text)
@@ -100,13 +118,14 @@ class EIScan(object):
                 if p.status_code == 200:
                     if p.text.find(p_ip['proxy']):
                         logger.info(p_ip['proxy'] + " 【ok】")
-                        self.user_proxy.append(pt_s)
+                        if pt_s not in self.user_proxy:
+                            self.user_proxy.append(pt_s)
             except:
                 requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(p_ip['proxy']))
         if len(self.user_proxy) < 1:
             self.get_proxy()
         if len(self.user_proxy) < 3:
-            _thread.start_new_thread(self.get_proxy, ())
+            _thread.start_new_thread(self.get_proxy, (True,))
         if isRedis:
             r.set("c:im:proxy", json.dumps(self.user_proxy))
         proxy_bar.close()
@@ -251,13 +270,15 @@ class EIScan(object):
             info["wechatoa"] = item_detail['newTabs'][4 + l]['children'][8]['total']
             info["appinfo"] = item_detail['newTabs'][4 + l]['children'][9]['total']
             email_info = {
-                "entName": info["entName"],
+                # "entName": info["entName"],
                 "email": info["email"],
                 "legalPerson": info["legalPerson"],
                 "telephone": info["telephone"],
             }
-            self.enInfo['emailInfo'].append(info["email"])
-            self.enInfo['legalPersonInfo'].append(email_info)
+            if info["email"] not in self.enInfo['emailInfo'] and info["email"] != "-":
+                self.enInfo['emailInfo'].append(info["email"])
+            if email_info not in self.enInfo['legalPersonInfo']:
+                self.enInfo['legalPersonInfo'].append(email_info)
 
         return info
 
@@ -439,6 +460,7 @@ class EIScan(object):
             self.get_proxy()
         if len(self.user_proxy) < 1:
             self.get_proxy()
+        _thread.start_new_thread(self.get_proxy, (True,))
 
     def export(self, res, eName):
         with open('{}-{}.csv'.format(datetime.date.today(), eName), 'a', newline='') as csvfile:
@@ -456,52 +478,44 @@ class EIScan(object):
                 pass
             pass
 
-    def main(self, name=None):
-        logger.info("Start print log")
-        if name is not None:
-            company = name
-        else:
-            print("==== 【命令行模式】 Need Keyword ====")
-            company = input("")
-        self.icp_list = []
-        self.data = []
-        self.c_data = {}
-        self.p_bar = None
+    def main(self, pid=None):
+        logger.info("=== JOB Start ===")
+        self.clear()
+        # 获取关键词，判断是否命令模式
+        search_keyword = None
         self.pid = None
-        self.c_name = None
-        self.rKey = None
-        self.enInfo = {
-            "basicInfo": {},
-            "icpList": [],
-            "emailInfo": [],
-            "appInfo": [],
-            "socialInfo": [],
-            "legalPersonInfo": []
-        }
+        if self.isCmd:
+            print("==== 【命令行模式】 请输入关键词 ====")
+            search_keyword = input("")
+        elif pid is not None:
+            self.pid = pid
 
         # 设置进度条
         self.p_bar = tqdm(total=100)
         # 判断代理情况
         self.check_proxy()
+        self.p_bar.update(10)
         # 判断结束代理
 
-        self.p_bar.update(10)
-        pid = self.check_name(company)[0]
-        if pid is not None:
-            self.pid = pid
+        if self.isCmd:
+            res = self.check_name(search_keyword)
+            if res is not None:
+                self.pid = res[0]
+
+        if self.pid is not None:
             self.rKey = "c:im:info:" + self.pid
             if isRedis:
                 if r.get(self.rKey) is None or True:
-                    self.get_company_info(pid)
+                    self.get_company_info(self.pid)
                 else:
                     self.c_data = r.get(self.rKey)
             else:
-                self.get_company_info(pid)
+                self.get_company_info(self.pid)
 
         self.p_bar.close()
-
+        self.c_data['enInfo'] = self.enInfo
         # 命令模式输出
-        if name is not None:
+        if not self.isCmd:
             return self.c_data
         else:
             print(self.enInfo)
@@ -526,4 +540,5 @@ class EIScan(object):
 
 if __name__ == '__main__':
     Scan = EIScan()
+    Scan.isCmd = True
     Scan.main()
