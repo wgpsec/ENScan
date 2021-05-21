@@ -102,7 +102,8 @@ if __name__ == '__main__':
             if (r.get("c:im:info:" + res_ag[0]) is not None) or isHas:
                 if delS is None:
                     print(res_ag[0])
-                    d_info["data"] = json.loads(r.get("c:im:info:" + res_ag[0]))
+                    if r.exists("c:im:info:" + res_ag[0]):
+                        d_info["data"] = json.loads(r.get("c:im:info:" + res_ag[0]))
                     return Response(json.dumps(d_info), mimetype='application/json')
                 else:
                     r.delete("c:im:info:" + res_ag[0])
@@ -117,11 +118,11 @@ if __name__ == '__main__':
                     "pid": res_ag[0],
                     "taskId": s.id
                 }
-                return Response(json.dumps(d_info), mimetype='application/json'), 500
+                return Response(json.dumps(d_info), mimetype='application/json')
         else:
-            d_info['code'] = 5000
+            d_info['code'] = 5001
             d_info['msg'] = "No Task"
-            return Response(json.dumps(d_info), mimetype='application/json'), 500
+            return Response(json.dumps(d_info), mimetype='application/json')
 
 
     @app.route('/get')

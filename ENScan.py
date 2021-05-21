@@ -15,16 +15,14 @@ from colorama import Fore
 from flask import Flask, request
 from tqdm import tqdm
 
-import Config
-
 requests.packages.urllib3.disable_warnings()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-isRedis = True
+isRedis = False
 if isRedis:
-    pool = Config.pool
+    pool = redis.ConnectionPool(host='localhost', port=6379, password='')
     r = redis.StrictRedis(connection_pool=pool)
 
 
@@ -43,6 +41,9 @@ class EIScan(object):
         self.rKey = None
         self.enInfo = {}
         self.clear()
+        self.is_proxy = False
+        self.version = "v1.0.0"
+        self.proxy = "http://proxy.ts.wgpsec.org/get_all/"
 
     def clear(self):
         self.icp_list = []
@@ -60,6 +61,21 @@ class EIScan(object):
             "socialInfo": [],
             "legalPersonInfo": []
         }
+
+    def get_show_banner(self):
+        print("""\033[32m
+              ______ _   _  _____                 
+             |  ____| \ | |/ ____|                
+             | |__  |  \| | (___   ___ __ _ _ __  
+             |  __| | . ` |\___ \ / __/ _` | '_ \ 
+             | |____| |\  |____) | (_| (_| | | | |
+             |______|_| \_|_____/ \___\__,_|_| |_|
+                                            
+                ENScan 企业资产快速收集工具 {}
+                  WgpSec Team
+                www.wgpsec.org
+                \033[0m
+                """.format(self.version))
 
     def set_redis(self):
         if isRedis:
@@ -88,7 +104,7 @@ class EIScan(object):
             'Accept-Encoding': 'gzip, deflate',
             'Accept-Language': 'zh-Hans-CN, zh-Hans; q=0.5',
             'Connection': 'Keep-Alive',
-            'Cookie': 'BIDUPSID={};'.format("959BD58239197A4C8C27D9AA6CE6802A"),
+            'Cookie': 'BIDUPSID={};'.format("959BD58239197A4C8C27D9AA6CE6803A"),
             'Referer': referer,
             'User-Agent': ua
         }
@@ -98,6 +114,8 @@ class EIScan(object):
     def get_proxy(self, is_add=False):
         if not is_add:
             self.user_proxy = []
+        self.user_proxy = []
+        return self.user_proxy
         logger.info("Get Proxy")
         test_p = requests.get('http://proxy.ts.wgpsec.org/get_all/', timeout=3)
         pr_ip = json.loads(test_p.text)
@@ -135,19 +153,24 @@ class EIScan(object):
     # 统一代理请求
     def get_req(self, url, referer, redirect, is_json=False, t=0):
         # 随机获取一个代理
-        proxy = random.choice(self.user_proxy)
+        proxy = False
+        if self.is_proxy:
+            proxy = random.choice(self.user_proxy)
         # 判断尝试次数
         if t > 20:
             logger.error("【失败】请求超过20次 {}".format(url))
-            raise Exception(print("！！！尝试超过！！！ NO NO!!!"))
+            raise Exception(print("请求错误尝试超过20次，自动退出"))
         try:
-            if proxy:
+            if proxy & self.is_proxy:
                 resp = requests.get(url, headers=self.build_headers(referer), verify=False, timeout=10,
                                     allow_redirects=redirect,
                                     proxies=proxy)
+                # print(resp.text)
             else:
-                logger.error("【未检测到任何代理请求】")
-                raise Exception(print("没有获取到代理"))
+                resp = requests.get(url, headers=self.build_headers(referer), verify=False, timeout=10,
+                                    allow_redirects=redirect,
+                                    )
+                # logger.error("【未检测到任何代理请求】")
             # 判断返回为 200 成功
             if resp.status_code == 200:
                 res = resp.text
@@ -166,20 +189,22 @@ class EIScan(object):
                 return self.get_req(url, referer, redirect, is_json, t + 1)
         except requests.exceptions.Timeout:
             logger.info("【代理超时自动重连】 {} ".format(proxy))
-            if len(self.user_proxy) > 3:
-                logger.info("【自动删除代理】 {} ".format(proxy))
-                self.user_proxy.remove(proxy)
-            if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
-                _thread.start_new_thread(self.get_proxy, ())
+            if self.is_proxy:
+                if len(self.user_proxy) > 3:
+                    logger.info("【自动删除代理】 {} ".format(proxy))
+                    self.user_proxy.remove(proxy)
+                if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
+                    _thread.start_new_thread(self.get_proxy, ())
             return self.get_req(url, referer, redirect, is_json, t + 1)
         except requests.exceptions.ProxyError:
-            logger.info("【代理错误】 {} ".format(proxy))
-            requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(proxy['https']))
-            if len(self.user_proxy) > 3:
-                logger.info("【自动删除代理】 {} ".format(proxy))
-                self.user_proxy.remove(proxy)
-            if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
-                _thread.start_new_thread(self.get_proxy, ())
+            if self.is_proxy:
+                logger.info("【代理错误】 {} ".format(proxy))
+                requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(proxy['https']))
+                if len(self.user_proxy) > 3:
+                    logger.info("【自动删除代理】 {} ".format(proxy))
+                    self.user_proxy.remove(proxy)
+                if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
+                    _thread.start_new_thread(self.get_proxy, ())
             return self.get_req(url, referer, redirect, is_json, t + 1)
 
         except Exception as e:
@@ -191,27 +216,37 @@ class EIScan(object):
         finally:
             pass
 
-    def parse_index(self, content):
-        tag_2 = '/* eslint-enable */</script> <script type="text/javascript"'
+    def parse_index(self, content, flag=True):
+        tag_2 = '/* eslint-enable */</script><script data-app'
         tag_1 = 'window.pageData ='
         idx_1 = content.find(tag_1)
         idx_2 = content.find(tag_2)
-
+        # 判断关键词区间中的JSON数据来进行匹配
         if idx_2 > idx_1:
-
+            # 关键词提取判断，去除多余字符
             mystr = content[idx_1 + len(tag_1): idx_2].strip()
+            mystr = mystr.replace("\n", "")
+            mystr = mystr.replace("window.isSpider = null;", "")
+            mystr = mystr.replace("window.updateTime = null;", "")
+            mystr = mystr.replace(" ", "")
             len_str = len(mystr)
             if mystr[len_str - 1] == ';':
                 mystr = mystr[0:len_str - 1]
+            # 数据JSON转化
             j = json.loads(mystr)
+            # 判断数据
+            if flag:
+                return j["result"]
 
             if len(j["result"]["resultList"]) > 0:
                 item = j["result"]["resultList"][0]
                 return item
             else:
+                # 返回可能没查到企业信息
                 return None
 
         else:
+            logger.error("【关键词数据提取失败】 {}".format(idx_1))
             return None
 
     def get_item_name(self, item):
@@ -231,12 +266,17 @@ class EIScan(object):
             return self.access_pid(pid, url_prefix)
 
     def parse_detail(self, content):
-        tag_2 = '/* eslint-enable */</script> <script type="text/javascript"'
+        tag_2 = '/* eslint-enable */</script><script data-app'
         tag_1 = 'window.pageData ='
         idx_1 = content.find(tag_1)
         idx_2 = content.find(tag_2)
         if idx_2 > idx_1:
             mystr = content[idx_1 + len(tag_1): idx_2].strip()
+            mystr = mystr.replace("\n", "")
+            mystr = mystr.replace("window.isSpider = null;", "")
+            mystr = mystr.replace("window.updateTime = null;", "")
+            mystr = mystr.replace(" ", "")
+            # mystr = content[idx_1 + len(tag_1): idx_2].strip()
             len_str = len(mystr)
             if mystr[len_str - 1] == ';':
                 mystr = mystr[0:len_str - 1]
@@ -322,7 +362,7 @@ class EIScan(object):
                 self.set_redis()
             for t in s_info:
                 print(t + ":" + str(s_info[t]))
-            if s_info['icpNum'] > 0:
+            if s_info['icpNum'] != "" and s_info['icpNum'] > 0:
                 print("-ICP备案-")
                 icp_info = self.get_info_list(pid, "detail/icpinfoAjax")
                 c_info['icp_info'] = icp_info
@@ -340,7 +380,7 @@ class EIScan(object):
             if flag:
                 self.c_data['info'] = c_info
                 self.set_redis()
-            if s_info['appinfo'] > 0:
+            if s_info['appinfo'] != "" and s_info['appinfo'] > 0:
                 print("-APP信息-")
                 info_res = self.get_info_list(pid, "c/appinfoAjax")
                 c_info['app_info'] = info_res
@@ -351,7 +391,7 @@ class EIScan(object):
             if flag:
                 self.c_data['info'] = c_info
                 self.set_redis()
-            if s_info['microblog'] > 0:
+            if s_info['microblog'] != "" and int(s_info['microblog']) > 0:
                 print("-微博信息-")
                 info_res = self.get_info_list(pid, "c/microblogAjax")
                 c_info['micro_blog'] = info_res
@@ -360,7 +400,7 @@ class EIScan(object):
             if flag:
                 self.c_data['info'] = c_info
                 self.set_redis()
-            if s_info['wechatoa'] > 0:
+            if s_info['wechatoa'] != "" and s_info['wechatoa'] > 0:
                 print("-微信公众号信息-")
                 info_res = self.get_info_list(pid, "c/wechatoaAjax")
                 c_info['wechat_mp'] = info_res
@@ -369,12 +409,12 @@ class EIScan(object):
             if flag:
                 self.c_data['info'] = c_info
                 self.set_redis()
-            # if s_info['copyrightNum'] > 0:
-            #     print("-软件著作-")
-            #     copyright_info = self.get_info_list(pid, "detail/copyrightAjax")
-            #     for copy_item in copyright_info:
-            #         print(copy_item['softwareName'])
-            #         print(copy_item['detail'])
+            if s_info['copyrightNum'] != "" and s_info['copyrightNum'] > 0:
+                print("-软件著作-")
+                copyright_info = self.get_info_list(pid, "detail/copyrightAjax")
+                for copy_item in copyright_info:
+                    print(copy_item['softwareName'])
+                    print(copy_item['detail'])
             print("-XX-基本信息END-XX-")
         return c_info
 
@@ -384,18 +424,20 @@ class EIScan(object):
         url_prefix = 'https://www.baidu.com/'
         url_a = 'https://aiqicha.baidu.com/s?q=' + company + '&t=0'
         content = self.get_req(url_a, url_prefix, False)
-        item = self.parse_index(content)
+        item = self.parse_index(content, False)
         if t > 3:
             return None
         if item:
             return item
         else:
-            logger.info("【关键词】{} 【失败重试】{}".format(name, t))
+            logger.warning("【关键词查询重试】{}  {}".format(name, t))
             return self.get_cm_if(name, t + 1)
 
     def get_company_info(self, pid):
+        print(pid)
         # 根据pid去查询公司信息
         self.c_data['info'] = self.get_company_c(pid, True)
+        print(self.c_data)
         self.set_redis()
         self.p_bar.update(10)
         print(self.c_data['info'])
@@ -424,7 +466,8 @@ class EIScan(object):
             holds_info_data = {}
             print(s['entName'] + " 状态：" + s['openStatus'] + " 投资比例：" + s['regRate'])
             if s['regRate'] != '-':
-                if float(s['regRate'].replace("%", "")) > 50:
+                # 判断投资比例
+                if float(s['regRate'].replace("%", "")) > 90:
                     holds_info_data = self.get_company_c(s['pid'])
                     print(holds_info_data)
             invest_data.append({
@@ -448,22 +491,23 @@ class EIScan(object):
                 self.c_name = my[1]
             return my
         else:
-            logger.warning("【未查询到关键词】 {}".format(name))
+            logger.error("【未查询到关键词】 {}".format(name))
             return None
 
     def check_proxy(self):
-        # 判断代理情况
-        if isRedis:
-            if r.get("c:im:proxy") is not None:
-                self.user_proxy = json.loads(r.get("c:im:proxy"))
-        if len(self.user_proxy) < 1:
-            self.get_proxy()
-        if len(self.user_proxy) < 1:
-            self.get_proxy()
-        _thread.start_new_thread(self.get_proxy, (True,))
+        # 判断代理情况，是否开启检查代理
+        if self.is_proxy:
+            logger.info("Check and update Proxy Info")
+            if isRedis:
+                if r.get("c:im:proxy") is not None:
+                    self.user_proxy = json.loads(r.get("c:im:proxy"))
+            if len(self.user_proxy) < 1:
+                self.get_proxy()
+            _thread.start_new_thread(self.get_proxy, (True,))
 
     def export(self, res, eName):
-        with open('{}-{}.csv'.format(datetime.date.today(), eName), 'a', newline='') as csvfile:
+        print("导出" + eName)
+        with open('res/{}-{}.csv'.format(datetime.date.today(), eName), 'a', newline='', encoding='utf-8-sig') as csvfile:
             fieldnames = ['域名', '站点名称', '首页', '公司名称', 'ICP备案号']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             # 注意header是个好东西
@@ -479,6 +523,7 @@ class EIScan(object):
             pass
 
     def main(self, pid=None):
+        self.get_show_banner()
         logger.info("=== JOB Start ===")
         self.clear()
         # 获取关键词，判断是否命令模式
@@ -492,11 +537,13 @@ class EIScan(object):
 
         # 设置进度条
         self.p_bar = tqdm(total=100)
+
         # 判断代理情况
         self.check_proxy()
         self.p_bar.update(10)
         # 判断结束代理
 
+        # 判断命令模式，对关键词进行处理
         if self.isCmd:
             res = self.check_name(search_keyword)
             if res is not None:
@@ -505,25 +552,30 @@ class EIScan(object):
         if self.pid is not None:
             self.rKey = "c:im:info:" + self.pid
             if isRedis:
-                if r.get(self.rKey) is None or True:
+                if r.get(self.rKey) is None:
                     self.get_company_info(self.pid)
                 else:
-                    self.c_data = r.get(self.rKey)
+                    self.c_data = json.loads(r.get(self.rKey))
             else:
                 self.get_company_info(self.pid)
+                self.c_data['enInfo'] = self.enInfo
 
         self.p_bar.close()
-        self.c_data['enInfo'] = self.enInfo
+
         # 命令模式输出
         if not self.isCmd:
             return self.c_data
         else:
-            print(self.enInfo)
-            email_info = set(self.enInfo['emailInfo'])
+            # print(self.enInfo)
+            print("!!!!!!!!!!!!Email!!!!!!!!!!!!!!!1")
+            email_info = self.c_data['enInfo']['emailInfo']
             for item in email_info:
                 print(item)
+            p_info = self.c_data['enInfo']['legalPersonInfo']
+            for i in p_info:
+                print(i)
             res = []
-            for item in self.enInfo['icpList']:
+            for item in self.c_data['enInfo']['icpList']:
                 print(item)
                 csv_res = {
                     '域名': item['domain'],
@@ -534,7 +586,7 @@ class EIScan(object):
                 }
                 res.append(csv_res)
             self.export(res, self.c_name)
-            print(self.c_data)
+            # print(self.c_data)
             self.main()
 
 
