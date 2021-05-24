@@ -1,10 +1,10 @@
 #!env python3
-import csv
 import datetime
 import json
-import time
 import logging
+from time import sleep
 
+import pandas as pd
 import redis
 import requests
 import random
@@ -12,14 +12,13 @@ import re
 import _thread
 
 from colorama import Fore
-from flask import Flask, request
 from tqdm import tqdm
 
 requests.packages.urllib3.disable_warnings()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
+# 是否开启Redis模式
 isRedis = False
 if isRedis:
     pool = redis.ConnectionPool(host='localhost', port=6379, password='')
@@ -28,12 +27,18 @@ if isRedis:
 
 class EIScan(object):
     def __init__(self):
-        self.user_proxy = []
+        # 文件配置项
+        self.user_proxy = []  # 是否添加常用代理
+        self.cookie = "BAIDUID=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; BIDUPSID=B0EA5B5A26D48D91E92ED7191B603D2B; PSTM=1591879205; BAIDUID_BFESS=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; __yjs_duid=1_05288c5d52ed09ad65fabd2cb8f272911620919713778; log_guid=8ceea695cea8bcf66f5faf514f53b8c9; _j47_ka8_=57; Hm_lvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621824671,1621824750; ZX_UNIQ_UID=85ae4e958df381c94e13bddd55a5f9c8; _fb537_=xlTM-TogKuTwrSsAHhHEmgaFja-dWn3YvEPTiVeHLHYLmd; ZX_HISTORY=%5B%7B%22visittime%22%3A%222021-05-24+11%3A12%3A22%22%2C%22pid%22%3A%22xlTM-TogKuTwzcJnGP0jxDDknK7qURq9UQmd%22%7D%2C%7B%22visittime%22%3A%222021-05-24+10%3A53%3A31%22%2C%22pid%22%3A%22xlTM-TogKuTwT8nHWdUj1%2AFYCl0X5VQzfAmd%22%7D%5D; Hm_lpvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621825944; ab_sr=1.0.0_YmUyOWRkNTRjYWU2Mjk0ZTg1ZmI5OTAwYjJiM2Y0MzIzYWIxNTk4YjM0MWMyZjI4Mjc2YTU5M2Y2N2ZhMWJjZDJlMTI5NzFjYzlkMjAyZGEzMTc0MDllNjczMTgwMmMw; __yjs_st=2_MGE3M2I5MGE3NzJjYzdmMTlkZjY1YjMzOGEyYWVmMzE3Njk2NWM3YTY4Yzk1NDgzN2Y2MzgwMWFiZDZhZjdmNzc1ZjA1MDMyMWYyNDcwZGFkZjhiNTQzMmYyMzZiNTVhMzZhMjg1YjcxYTkzMGNkNWY1Y2IwOWIxZGM5MGRjMzAxN2M3ZTZmMDA0N2NlMTAwYWMyNGZmOTk4MWUyNTkxOTQwODI2YTc5NGMzNzExYjM1M2I2NDg5MWZiM2Q2NWIzMmMxNmQ1ODM3NGZjZmU1MmE4ZGFlZTRiYjEyZWU4MTdhOTFlNDQ4YWRiY2U1MWE3Mzc2ZDcxZTdlMzdkZGViNF83XzQyMzJlMzE5; _s53_d91_=93c39820170a0a5e748e1ac9ecc79371df45a908d7031a5e0e6df033fcc8068df8a85a45f59cb9faa0f164dd33ed0c72e56add5686b1e41220ccd34d45dc9598b464097149c6a9af7af5be8d893ab29007d664550a119b513036f45fe7361e1d156b66327ae48035c92e90f4279c7a973988e3650f102d8eba8fe2ed3874528cf247849da2160675435f25331b6561595c611f8641902ca8c796c75dceedd365a9059db2a72c946d6c88a32ce92fcd9770df441945c675ce1e8ac1de9c334f14b29e11de9b942ba927c99b124812d4a5; _y18_s21_=266bfd2e"  # 是否添加Cookie信息
+        self.is_proxy = False
         self.isCmd = False
+        # 是否拿到分支机构详细信息，为了获取邮箱和人名信息等
+        self.is_branch = False
+        # 投资比例不清楚的是否筛选
+        self.invest_is_rd = False
+        self.invest_num = 90
         # 初始化数据
         self.resData = {}
-        self.icp_list = []
-        self.data = []
         self.c_data = {}
         self.p_bar = None
         self.pid = None
@@ -41,13 +46,11 @@ class EIScan(object):
         self.rKey = None
         self.enInfo = {}
         self.clear()
-        self.is_proxy = False
+
         self.version = "v1.0.0"
         self.proxy = "http://proxy.ts.wgpsec.org/get_all/"
 
     def clear(self):
-        self.icp_list = []
-        self.data = []
         self.c_data = {}
         self.p_bar = None
         self.pid = None
@@ -104,7 +107,7 @@ class EIScan(object):
             'Accept-Encoding': 'gzip, deflate',
             'Accept-Language': 'zh-Hans-CN, zh-Hans; q=0.5',
             'Connection': 'Keep-Alive',
-            'Cookie': 'BAIDUID=B0EA5B5A26D48D912916667E2C032D6C:FG=1; BIDUPSID=B0EA5B5A12D48D91E92ED7191B603D2B; PSTM=1591879205; BAIDUID_BFESS=B1EA5B5A26D48D915316667E2C052D6C:FG=1;',
+            'Cookie': self.cookie,
             'Referer': referer,
             'User-Agent': ua
         }
@@ -114,8 +117,6 @@ class EIScan(object):
     def get_proxy(self, is_add=False):
         if not is_add:
             self.user_proxy = []
-        self.user_proxy = []
-        return self.user_proxy
         logger.info("Get Proxy")
         test_p = requests.get('http://proxy.ts.wgpsec.org/get_all/', timeout=3)
         pr_ip = json.loads(test_p.text)
@@ -132,13 +133,16 @@ class EIScan(object):
             try:
                 proxy_bar.update(1)
                 # self.user_proxy.append(pt_s)
-                p = requests.get('https://icanhazip.com', verify=False, proxies=pt_s, timeout=3)
+                # 判断代理存活性
+                p = requests.get('http://myip.ipip.net', verify=False, proxies=pt_s, timeout=3)
                 if p.status_code == 200:
                     if p.text.find(p_ip['proxy']):
                         logger.info(p_ip['proxy'] + " 【ok】")
                         if pt_s not in self.user_proxy:
                             self.user_proxy.append(pt_s)
-            except:
+            except Exception as e:
+                a = e
+                # 删除错误代理
                 requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(p_ip['proxy']))
         if len(self.user_proxy) < 1:
             self.get_proxy()
@@ -152,71 +156,63 @@ class EIScan(object):
 
     # 统一代理请求
     def get_req(self, url, referer, redirect, is_json=False, t=0):
-        # 随机获取一个代理
-        proxy = False
-        if self.is_proxy:
-            proxy = random.choice(self.user_proxy)
         # 判断尝试次数
         if t > 20:
             logger.error("【失败】请求超过20次 {}".format(url))
             raise Exception(print("请求错误尝试超过20次，自动退出"))
+
+        # 随机获取一个代理
+        proxy = False
+        if self.is_proxy and len(self.user_proxy) > 0:
+            proxy = random.choice(self.user_proxy)
+
         try:
             if proxy & self.is_proxy:
                 resp = requests.get(url, headers=self.build_headers(referer), verify=False, timeout=10,
                                     allow_redirects=redirect,
                                     proxies=proxy)
-                # print(resp.text)
             else:
                 resp = requests.get(url, headers=self.build_headers(referer), verify=False, timeout=10,
                                     allow_redirects=redirect,
                                     )
-                # print(resp.text)
-                # logger.error("【未检测到任何代理请求】")
-            # 判断返回为 200 成功
+
             if resp.status_code == 200:
+                # 判断返回为 200 成功
                 res = resp.text
                 # 判断是否需要进行 json 校验（部分请求可能出现验证码，非预期效果）
                 if is_json:
                     # 判断status json格式成功返回一般都带这个
                     if resp.json()['status'] != 0:
-                        logger.warning("【JSON校验错误】返回内容： {} ".format(res))
-                        # 递归请求
+                        logger.warning("【JSON校验错误重试】返回内容： {} ".format(res))
+                        # 递归请求，这里错误可能是网络原因什么的导致错误
                         return self.get_req(url, referer, redirect, is_json, t + 1)
-                    return res
-                else:
-                    return res
+                return res
+            elif resp.status_code == 302:
+                # 如果是302一般是跳到百度的安全校验那边去了，需要设置下Cookie信息或者用代理
+                logger.error("【风险校验】需要更新Cookie {}".format(url))
+                return None
             else:
-                # 如果返回不是200 OK那就继续请求看看
+                # 如果返回不是302和200 那就继续请求看看是不是能解决
                 return self.get_req(url, referer, redirect, is_json, t + 1)
         except requests.exceptions.Timeout:
-            logger.info("【代理超时自动重连】 {} ".format(proxy))
-            if self.is_proxy:
-                if len(self.user_proxy) > 3:
-                    logger.info("【自动删除代理】 {} ".format(proxy))
-                    self.user_proxy.remove(proxy)
-                if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
-                    _thread.start_new_thread(self.get_proxy, ())
+            logger.info("【连接超时自动重连】 {} ".format(proxy))
+            sleep(1)
             return self.get_req(url, referer, redirect, is_json, t + 1)
         except requests.exceptions.ProxyError:
+            logger.info("【代理连接错误】 {} ".format(proxy))
             if self.is_proxy:
-                logger.info("【代理错误】 {} ".format(proxy))
+                logger.info("【自动删除代理】 {} ".format(proxy))
                 requests.get("http://proxy.ts.wgpsec.org/delete/?proxy={}".format(proxy['https']))
-                if len(self.user_proxy) > 3:
-                    logger.info("【自动删除代理】 {} ".format(proxy))
-                    self.user_proxy.remove(proxy)
+                self.user_proxy.remove(proxy)
+                # 看看代理还够不够，不够得新增
                 if t > len(self.user_proxy) / 2 or len(self.user_proxy) < 3:
                     _thread.start_new_thread(self.get_proxy, ())
+            sleep(1)
             return self.get_req(url, referer, redirect, is_json, t + 1)
-
         except Exception as e:
-            print(e)
+            # 如果不是上面几种错误，估计出问题了，就不要请求了
             logger.warning("【请求错误】 {} ".format(e))
-            if t > 20:
-                print("ERROR")
-                raise Exception(print("！！！尝试超过！！！" + str(e)))
-            return self.get_req(url, referer, redirect, is_json, t + 1)
-        finally:
-            pass
+            return None
 
     def parse_index(self, content, flag=True):
         tag_2 = '/* eslint-enable */</script><script data-app'
@@ -265,10 +261,10 @@ class EIScan(object):
         if res:
             return res
         else:
-            logger.info("access pid ERROR try{}".format(t))
             if t > 20:
                 logger.error("Error to access pid".format(t))
                 return None
+            logger.info("access pid ERROR try{}".format(t))
             return self.access_pid(pid, url_prefix, t + 1)
 
     def parse_detail(self, content):
@@ -307,6 +303,7 @@ class EIScan(object):
                 l = 1
             else:
                 l = 0
+            # 根据信息顺序数字判断
             info["invest"] = item_detail['newTabs'][0 + l]['children'][7]['total']
             info["hold"] = item_detail['newTabs'][0 + l]['children'][8]['total']
             info["branch"] = item_detail['newTabs'][0 + l]['children'][12]['total']
@@ -315,6 +312,7 @@ class EIScan(object):
             info["microblog"] = item_detail['newTabs'][4 + l]['children'][7]['total']
             info["wechatoa"] = item_detail['newTabs'][4 + l]['children'][8]['total']
             info["appinfo"] = item_detail['newTabs'][4 + l]['children'][9]['total']
+            info["supplier"] = item_detail['newTabs'][4 + l]['children'][18]['total']
             email_info = {
                 # "entName": info["entName"],
                 "email": info["email"],
@@ -329,6 +327,7 @@ class EIScan(object):
         return info
 
     def get_info_list(self, pid, types):
+        logger.info("查询API {} ".format(types))
         url_prefix = 'https://www.baidu.com/'
         url = "https://aiqicha.baidu.com/"
         url += types
@@ -336,21 +335,21 @@ class EIScan(object):
         content = self.get_req(url, url_prefix, True, True)
         res_data = json.loads(content)
         list_data = []
-        print("开始查询 " + types)
-
         if res_data['status'] == 0:
             data = res_data['data']
             if types == "relations/relationalMapAjax":
                 data = data['investRecordData']
             page_count = data['pageCount']
             if page_count > 1:
+                proxy_bar = tqdm(total=page_count, desc="【INFO_LIST】",
+                                 bar_format='{l_bar}%s{bar}%s{r_bar}' % (Fore.BLUE, Fore.RESET))
                 for t in range(1, page_count + 1):
-                    print(str(t) + "/" + str(page_count))
-                    # !!!!!!!!!!!!修复参数叠加bug
+                    proxy_bar.update(1)
                     req_url = url + "&p=" + str(t) + "&page=" + str(t)
                     content = self.get_req(req_url, url_prefix, True, True)
                     res_s_data = json.loads(content)['data']
                     list_data.extend(res_s_data['list'])
+                proxy_bar.close()
             else:
                 list_data = data['list']
         return list_data
@@ -421,16 +420,27 @@ class EIScan(object):
                 for copy_item in copyright_info:
                     print(copy_item['softwareName'])
                     print(copy_item['detail'])
+            if s_info['supplier'] != "" and s_info['supplier'] > 0:
+                print("-供应商信息-")
+                copyright_info = self.get_info_list(pid, "c/supplierAjax")
+                for copy_item in copyright_info:
+                    print(copy_item['supplier'])
+                c_info['supplier_info'] = copyright_info
+            if flag:
+                self.c_data['info'] = c_info
+                self.set_redis()
             print("-XX-基本信息END-XX-")
         return c_info
 
     # 查询关键词信息
     def get_cm_if(self, name, t=0):
         company = name
+        item = None
         url_prefix = 'https://www.baidu.com/'
         url_a = 'https://aiqicha.baidu.com/s?q=' + company + '&t=0'
         content = self.get_req(url_a, url_prefix, False)
-        item = self.parse_index(content, False)
+        if content:
+            item = self.parse_index(content, False)
         if t > 3:
             return None
         if item:
@@ -454,7 +464,9 @@ class EIScan(object):
         self.set_redis()
         for s in relations_info:
             print(s['entName'] + " " + s['openStatus'])
-            # self.get_company_c(s['pid'])
+            # 是否拿到分支机构的详细信息
+            if self.is_branch:
+                self.c_data['branch_list'][s['pid']] = self.get_company_c(s['pid'])
         self.p_bar.update(10)
         # print("===控股公司===")
         # holds_info_data = []
@@ -471,17 +483,17 @@ class EIScan(object):
         for s in holds_info:
             holds_info_data = {}
             print(s['entName'] + " 状态：" + s['openStatus'] + " 投资比例：" + s['regRate'])
-            if s['regRate'] != '-':
-                # 判断投资比例
-                if float(s['regRate'].replace("%", "")) > 90:
-                    holds_info_data = self.get_company_c(s['pid'])
-                    print(holds_info_data)
-            invest_data.append({
-                "entName": s['entName'],
-                "openStatus": s['openStatus'],
-                "regRate": s['regRate'],
-                "data": holds_info_data,
-            })
+            if s['regRate'] == '-':
+                s['regRate'] = "-1"
+            if float(s['regRate'].replace("%", "")) > self.invest_num or (s['regRate'] == "-1" and self.invest_is_rd):
+                holds_info_data = self.get_company_c(s['pid'])
+                print(holds_info_data)
+                invest_data.append({
+                    "entName": s['entName'],
+                    "openStatus": s['openStatus'],
+                    "regRate": s['regRate'].replace("%", ""),
+                    "data": holds_info_data,
+                })
         self.c_data['invest'] = invest_data
         self.set_redis()
         self.p_bar.update(10)
@@ -509,29 +521,74 @@ class EIScan(object):
                     self.user_proxy = json.loads(r.get("c:im:proxy"))
             if len(self.user_proxy) < 1:
                 self.get_proxy()
-            _thread.start_new_thread(self.get_proxy, (True,))
+            # _thread.start_new_thread(self.get_proxy, (True,))
 
-    def export(self, res, eName):
-        print("导出" + eName)
-        with open('res/{}-{}.csv'.format(datetime.date.today(), eName), 'a', newline='',
-                  encoding='utf-8-sig') as csvfile:
-            fieldnames = ['域名', '站点名称', '首页', '公司名称', 'ICP备案号']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            # 注意header是个好东西
-            writer.writeheader()
-            try:
-                for item in res:
-                    writer.writerow(item)
-            except Exception as e:
-                print(f'写入csv出错\n错误原因:{e}')
-                pass
-            finally:
-                pass
-            pass
+    def export(self):
+        logger.info("导出 {} 信息".format(self.c_name))
+        xlsx = pd.ExcelWriter(r"res/{}-{}.xlsx".format(datetime.date.today(), self.c_name))
+        res = []
+        # ICP备案信息
+        icp_names = ['域名', '站点名称', '首页', '公司名称', 'ICP备案号']
+        for item in self.c_data['enInfo']['icpList']:
+            csv_res = {
+                '域名': item['domain'],
+                '站点名称': item['siteName'],
+                '首页': item['homeSite'],
+                '公司名称': item['entName'],
+                'ICP备案号': item['icpNo'],
+            }
+            res.append(csv_res)
+        df1 = pd.DataFrame(res, columns=icp_names)
+        df1.to_excel(xlsx, sheet_name="ICP备案信息", index=False)
+        # 投资工资与比例信息
+        res = []
+        inv_names = ['公司名称', '状态', '投资比例', '数据信息']
+        for item in self.c_data['invest']:
+            csv_res = {
+                '公司名称': item['entName'],
+                '状态': item['openStatus'],
+                '投资比例': item['regRate'],
+                '数据信息': item['data']
+            }
+            res.append(csv_res)
+        df2 = pd.DataFrame(res, columns=inv_names)
+        df2.to_excel(xlsx, sheet_name="对外投资信息", index=False)
+        # 导出APP信息
+        res = []
+        app_names = ["名称", "分类", "logo文字", "logo地址", "应用描述", "应用所属公司"]
+        for item in self.c_data['enInfo']['appInfo']:
+            csv_res = {
+                '名称': item['name'],
+                '分类': item['classify'],
+                'logo文字': item['logoWord'],
+                'logo地址': item['logo'],
+                '应用描述': item['logoBrief'],
+                '应用所属公司': item['entName'],
+            }
+            res.append(csv_res)
+        df_app = pd.DataFrame(res, columns=app_names)
+        df_app.to_excel(xlsx, sheet_name="APP信息", index=False)
+
+        # 导出供应商信息
+        res = []
+        supplier_names = ["供应商", "来源", "所属公司", "日期"]
+        for item in self.c_data['info']['supplier_info']:
+            csv_res = {
+                '供应商': item['supplier'],
+                '来源': item['source'],
+                '所属公司': item['principalNameClient'],
+                '日期': item['cooperationDate']
+            }
+            res.append(csv_res)
+        df_supplier = pd.DataFrame(res, columns=supplier_names)
+        df_supplier.to_excel(xlsx, sheet_name="供应商", index=False)
+
+        xlsx.close()
+        logger.info("导出 {} 信息完成".format(self.c_name))
 
     def main(self, pid=None):
         self.get_show_banner()
-        logger.info("=== JOB Start ===")
+        logger.info("ENScan JOB Start")
         self.clear()
         # 获取关键词，判断是否命令模式
         search_keyword = None
@@ -575,24 +632,14 @@ class EIScan(object):
         else:
             # print(self.enInfo)
             print("!!!!!!!!!!!!Email!!!!!!!!!!!!!!!1")
-            email_info = self.c_data['enInfo']['emailInfo']
-            for item in email_info:
-                print(item)
-            p_info = self.c_data['enInfo']['legalPersonInfo']
-            for i in p_info:
-                print(i)
-            res = []
-            for item in self.c_data['enInfo']['icpList']:
-                print(item)
-                csv_res = {
-                    '域名': item['domain'],
-                    '站点名称': item['siteName'],
-                    '首页': item['homeSite'],
-                    '公司名称': item['entName'],
-                    'ICP备案号': item['icpNo'],
-                }
-                res.append(csv_res)
-            self.export(res, self.c_name)
+            if self.c_data:
+                email_info = self.c_data['enInfo']['emailInfo']
+                for item in email_info:
+                    print(item)
+                p_info = self.c_data['enInfo']['legalPersonInfo']
+                for i in p_info:
+                    print(i)
+                self.export()
             # print(self.c_data)
             self.main()
 
