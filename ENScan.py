@@ -30,7 +30,7 @@ class EIScan(object):
         # 文件配置项
         self.user_proxy = []  # 是否添加常用代理
         self.cookie = "BAIDUID=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; BIDUPSID=B0EA5B5A26D48D91E92ED7191B603D2B; PSTM=1591879205; BAIDUID_BFESS=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; __yjs_duid=1_05288c5d52ed09ad65fabd2cb8f272911620919713778; log_guid=8ceea695cea8bcf66f5faf514f53b8c9; _j47_ka8_=57; Hm_lvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621824671,1621824750; ZX_UNIQ_UID=85ae4e958df381c94e13bddd55a5f9c8; _fb537_=xlTM-TogKuTwrSsAHhHEmgaFja-dWn3YvEPTiVeHLHYLmd; ZX_HISTORY=%5B%7B%22visittime%22%3A%222021-05-24+11%3A12%3A22%22%2C%22pid%22%3A%22xlTM-TogKuTwzcJnGP0jxDDknK7qURq9UQmd%22%7D%2C%7B%22visittime%22%3A%222021-05-24+10%3A53%3A31%22%2C%22pid%22%3A%22xlTM-TogKuTwT8nHWdUj1%2AFYCl0X5VQzfAmd%22%7D%5D; Hm_lpvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621825944; ab_sr=1.0.0_YmUyOWRkNTRjYWU2Mjk0ZTg1ZmI5OTAwYjJiM2Y0MzIzYWIxNTk4YjM0MWMyZjI4Mjc2YTU5M2Y2N2ZhMWJjZDJlMTI5NzFjYzlkMjAyZGEzMTc0MDllNjczMTgwMmMw; __yjs_st=2_MGE3M2I5MGE3NzJjYzdmMTlkZjY1YjMzOGEyYWVmMzE3Njk2NWM3YTY4Yzk1NDgzN2Y2MzgwMWFiZDZhZjdmNzc1ZjA1MDMyMWYyNDcwZGFkZjhiNTQzMmYyMzZiNTVhMzZhMjg1YjcxYTkzMGNkNWY1Y2IwOWIxZGM5MGRjMzAxN2M3ZTZmMDA0N2NlMTAwYWMyNGZmOTk4MWUyNTkxOTQwODI2YTc5NGMzNzExYjM1M2I2NDg5MWZiM2Q2NWIzMmMxNmQ1ODM3NGZjZmU1MmE4ZGFlZTRiYjEyZWU4MTdhOTFlNDQ4YWRiY2U1MWE3Mzc2ZDcxZTdlMzdkZGViNF83XzQyMzJlMzE5; _s53_d91_=93c39820170a0a5e748e1ac9ecc79371df45a908d7031a5e0e6df033fcc8068df8a85a45f59cb9faa0f164dd33ed0c72e56add5686b1e41220ccd34d45dc9598b464097149c6a9af7af5be8d893ab29007d664550a119b513036f45fe7361e1d156b66327ae48035c92e90f4279c7a973988e3650f102d8eba8fe2ed3874528cf247849da2160675435f25331b6561595c611f8641902ca8c796c75dceedd365a9059db2a72c946d6c88a32ce92fcd9770df441945c675ce1e8ac1de9c334f14b29e11de9b942ba927c99b124812d4a5; _y18_s21_=266bfd2e"  # 是否添加Cookie信息
-        self.is_proxy = False
+        self.is_proxy = True
         self.isCmd = False
         # 是否拿到分支机构详细信息，为了获取邮箱和人名信息等
         self.is_branch = False
@@ -162,12 +162,12 @@ class EIScan(object):
             raise Exception(print("请求错误尝试超过20次，自动退出"))
 
         # 随机获取一个代理
-        proxy = False
+        proxy = None
         if self.is_proxy and len(self.user_proxy) > 0:
             proxy = random.choice(self.user_proxy)
 
         try:
-            if proxy & self.is_proxy:
+            if proxy is not None and self.is_proxy:
                 resp = requests.get(url, headers=self.build_headers(referer), verify=False, timeout=10,
                                     allow_redirects=redirect,
                                     proxies=proxy)
