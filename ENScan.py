@@ -104,7 +104,7 @@ class EIScan(object):
             'Accept-Encoding': 'gzip, deflate',
             'Accept-Language': 'zh-Hans-CN, zh-Hans; q=0.5',
             'Connection': 'Keep-Alive',
-            'Cookie': 'BIDUPSID={};'.format("959BD58239197A4C8C27D9AA6CE6803A"),
+            'Cookie': 'BAIDUID=B0EA5B5A26D48D912916667E2C032D6C:FG=1; BIDUPSID=B0EA5B5A12D48D91E92ED7191B603D2B; PSTM=1591879205; BAIDUID_BFESS=B1EA5B5A26D48D915316667E2C052D6C:FG=1;',
             'Referer': referer,
             'User-Agent': ua
         }
@@ -170,6 +170,7 @@ class EIScan(object):
                 resp = requests.get(url, headers=self.build_headers(referer), verify=False, timeout=10,
                                     allow_redirects=redirect,
                                     )
+                # print(resp.text)
                 # logger.error("【未检测到任何代理请求】")
             # 判断返回为 200 成功
             if resp.status_code == 200:
@@ -208,6 +209,7 @@ class EIScan(object):
             return self.get_req(url, referer, redirect, is_json, t + 1)
 
         except Exception as e:
+            print(e)
             logger.warning("【请求错误】 {} ".format(e))
             if t > 20:
                 print("ERROR")
@@ -256,13 +258,15 @@ class EIScan(object):
         return item['pid'], result
 
     def access_pid(self, pid, url_prefix):
-        url = "https://aiqicha.baidu.com/detail/compinfo?pid=" + pid
+        # url = "https://aiqicha.baidu.com/detail/compinfo?pid=" + pid
+        url = "https://aiqicha.baidu.com/company_detail_" + pid
         content = self.get_req(url, url_prefix, True)
+        # print(content)
         res = self.parse_detail(content)
-        # print(res)
         if res:
             return res
         else:
+            logger.info("access pid ERROR")
             return self.access_pid(pid, url_prefix)
 
     def parse_detail(self, content):
