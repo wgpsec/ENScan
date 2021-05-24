@@ -257,17 +257,19 @@ class EIScan(object):
         result = pattern.sub('', entName)
         return item['pid'], result
 
-    def access_pid(self, pid, url_prefix):
+    def access_pid(self, pid, url_prefix, t=0):
         # url = "https://aiqicha.baidu.com/detail/compinfo?pid=" + pid
         url = "https://aiqicha.baidu.com/company_detail_" + pid
         content = self.get_req(url, url_prefix, True)
-        # print(content)
         res = self.parse_detail(content)
         if res:
             return res
         else:
-            logger.info("access pid ERROR")
-            return self.access_pid(pid, url_prefix)
+            logger.info("access pid ERROR try{}".format(t))
+            if t > 20:
+                logger.error("Error to access pid".format(t))
+                return None
+            return self.access_pid(pid, url_prefix, t + 1)
 
     def parse_detail(self, content):
         tag_2 = '/* eslint-enable */</script><script data-app'
@@ -511,7 +513,8 @@ class EIScan(object):
 
     def export(self, res, eName):
         print("导出" + eName)
-        with open('res/{}-{}.csv'.format(datetime.date.today(), eName), 'a', newline='', encoding='utf-8-sig') as csvfile:
+        with open('res/{}-{}.csv'.format(datetime.date.today(), eName), 'a', newline='',
+                  encoding='utf-8-sig') as csvfile:
             fieldnames = ['域名', '站点名称', '首页', '公司名称', 'ICP备案号']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             # 注意header是个好东西
