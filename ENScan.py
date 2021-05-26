@@ -1,4 +1,5 @@
 #!env python3
+import argparse
 import datetime
 import json
 import logging
@@ -29,9 +30,9 @@ class EIScan(object):
     def __init__(self):
         # 文件配置项
         self.user_proxy = []  # 是否添加常用代理
-        self.cookie = "BAIDUID=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; BIDUPSID=B0EA5B5A26D48D91E92ED7191B603D2B; PSTM=1591879205; BAIDUID_BFESS=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; __yjs_duid=1_05288c5d52ed09ad65fabd2cb8f272911620919713778; log_guid=8ceea695cea8bcf66f5faf514f53b8c9; _j47_ka8_=57; Hm_lvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621824671,1621824750; ZX_UNIQ_UID=85ae4e958df381c94e13bddd55a5f9c8; _fb537_=xlTM-TogKuTwrSsAHhHEmgaFja-dWn3YvEPTiVeHLHYLmd; ZX_HISTORY=%5B%7B%22visittime%22%3A%222021-05-24+11%3A12%3A22%22%2C%22pid%22%3A%22xlTM-TogKuTwzcJnGP0jxDDknK7qURq9UQmd%22%7D%2C%7B%22visittime%22%3A%222021-05-24+10%3A53%3A31%22%2C%22pid%22%3A%22xlTM-TogKuTwT8nHWdUj1%2AFYCl0X5VQzfAmd%22%7D%5D; Hm_lpvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621825944; ab_sr=1.0.0_YmUyOWRkNTRjYWU2Mjk0ZTg1ZmI5OTAwYjJiM2Y0MzIzYWIxNTk4YjM0MWMyZjI4Mjc2YTU5M2Y2N2ZhMWJjZDJlMTI5NzFjYzlkMjAyZGEzMTc0MDllNjczMTgwMmMw; __yjs_st=2_MGE3M2I5MGE3NzJjYzdmMTlkZjY1YjMzOGEyYWVmMzE3Njk2NWM3YTY4Yzk1NDgzN2Y2MzgwMWFiZDZhZjdmNzc1ZjA1MDMyMWYyNDcwZGFkZjhiNTQzMmYyMzZiNTVhMzZhMjg1YjcxYTkzMGNkNWY1Y2IwOWIxZGM5MGRjMzAxN2M3ZTZmMDA0N2NlMTAwYWMyNGZmOTk4MWUyNTkxOTQwODI2YTc5NGMzNzExYjM1M2I2NDg5MWZiM2Q2NWIzMmMxNmQ1ODM3NGZjZmU1MmE4ZGFlZTRiYjEyZWU4MTdhOTFlNDQ4YWRiY2U1MWE3Mzc2ZDcxZTdlMzdkZGViNF83XzQyMzJlMzE5; _s53_d91_=93c39820170a0a5e748e1ac9ecc79371df45a908d7031a5e0e6df033fcc8068df8a85a45f59cb9faa0f164dd33ed0c72e56add5686b1e41220ccd34d45dc9598b464097149c6a9af7af5be8d893ab29007d664550a119b513036f45fe7361e1d156b66327ae48035c92e90f4279c7a973988e3650f102d8eba8fe2ed3874528cf247849da2160675435f25331b6561595c611f8641902ca8c796c75dceedd365a9059db2a72c946d6c88a32ce92fcd9770df441945c675ce1e8ac1de9c334f14b29e11de9b942ba927c99b124812d4a5; _y18_s21_=266bfd2e"  # 是否添加Cookie信息
+        self.cookie = "BAIDUID=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; BIDUPSID=B0EA5B5A26D48D91E92ED7191B603D2B; PSTM=1591879205; BAIDUID_BFESS=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; __yjs_duid=1_05288c5d52ed09ad65fabd2cb8f272911620919713778; log_guid=8ceea695cea8bcf66f5faf514f53b8c9; _j47_ka8_=57; ZX_HISTORY=%5B%7B%22visittime%22%3A%222021-05-24+12%3A33%3A24%22%2C%22pid%22%3A%22xlTM-TogKuTwzcJnGP0jxDDknK7qURq9UQmd%22%7D%2C%7B%22visittime%22%3A%222021-05-24+10%3A53%3A31%22%2C%22pid%22%3A%22xlTM-TogKuTwT8nHWdUj1%2AFYCl0X5VQzfAmd%22%7D%5D; Hm_lvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621824750,1621934330,1621934339,1622013362; Hm_lpvt_ad52b306e1ae4557f5d3534cce8f8bbf=1622013362; _s53_d91_=93c39820170a0a5e748e1ac9ecc79371df45a908d7031a5e0e6df033fcc8068df8a85a45f59cb9faa0f164dd33ed0c72e56add5686b1e41220ccd34d45dc9598b464097149c6a9af7af5be8d893ab29007d664550a119b513036f45fe7361e1d10d6fcb515a7205ce5f65b68e4ac151ea3dd2931fd306dfbc02b6d76e0ada19f666a0b7fcc4b38461e3baec6a867ecc6d0453029a89960b767c10a9194f94fc091a36658be6a85e9712f0f3a8bbc114172a701811bb93b24e59b03a754586c80f4216036acd7c1ffa798e2f006f8bb82; _y18_s21_=f3c516a9; ab_sr=1.0.0_MzMxYWJkMDJmYjc4MThmMjMzYjhiNDQxNjhiNmEzOTk4Y2YzNDc4MmY1MTgyYWVlMGRiZTE4ZWQ1N2Q2MmUyZmJjMjYwYjQ4YjI3OTM4NDk1ODdiZThkNTQ4YjlhYmMx; __yjs_st=2_ODQ3YmM3ODc5ZDZlMTI4MTMyY2IxY2NiYjJlM2ZkZGU0MjdlMzU2NDNiMmNkNThjMjQ1NDljYzhmYTY4OWEwMDIwMGRiMWRmYjNiMjM4Y2M1MzM2NTY2MmZiODdiYmQ3NWQzYjRjN2MxNTVlMzg1NTY0MDk2NWJjYTM1NDFjOWY3ODk1YjA0MDU1ZTI1YmRmMDZjZjM0M2IyMmMzM2M4MzhlOGY4MGE2YTg4ZDhhMDA0MWFjNWMyNWY5MjhhOWMyMTcxM2Y3MmY1NjIyNzRmZDA1ZDlmZjdiN2ViOWVlZTVhZDM5Y2MzN2E1MTRlNjhmMjNkZDFhNjkzODg0ZmUwYl83X2NiYzIyMDEz"  # 是否添加Cookie信息
         # 是否开启代理
-        self.is_proxy = True
+        self.is_proxy = False
         # 是否拿到分支机构详细信息，为了获取邮箱和人名信息等
         self.is_branch = False
         # 是否选出不清楚投资比例的
@@ -46,6 +47,7 @@ class EIScan(object):
         self.pid = None
         self.c_name = None
         self.rKey = None
+        self.is_rp = True
         self.enInfo = {}
         self.clear()
 
@@ -269,6 +271,19 @@ class EIScan(object):
             logger.info("access pid ERROR try{}".format(t))
             return self.access_pid(pid, url_prefix, t + 1)
 
+    def access_des(self, pid, url_prefix, t=0):
+        url = "https://aiqicha.baidu.com/compdata/navigationListAjax?pid=" + pid
+        res = self.get_req(url, url_prefix, True, is_json=True)
+        if res:
+            res = json.loads(res)['data']
+            return res
+        else:
+            if t > 20:
+                logger.error("Error to access pid".format(t))
+                return None
+            logger.info("access pid ERROR try{}".format(t))
+            return self.access_pid(pid, url_prefix, t + 1)
+
     def parse_detail(self, content):
         tag_2 = '/* eslint-enable */</script><script data-app'
         tag_1 = 'window.pageData ='
@@ -291,6 +306,7 @@ class EIScan(object):
 
     def get_company_info_user(self, pid):
         item_detail = self.access_pid(pid, "")
+        item_detail['newTabs'] = self.access_des(pid, "")
         info = {}
         if item_detail:
             # 基本信息获取
@@ -362,6 +378,7 @@ class EIScan(object):
         print("----基本信息----")
         if s_info['openStatus'] == '注销' or s_info['openStatus'] == '吊销':
             print(s_info['legalPerson'])
+            return None
         else:
             c_info['basic_info'] = s_info
             if flag:
@@ -422,6 +439,7 @@ class EIScan(object):
                 for copy_item in copyright_info:
                     print(copy_item['softwareName'])
                     print(copy_item['detail'])
+            c_info['supplier_info'] = None
             if s_info['supplier'] != "" and s_info['supplier'] > 0:
                 print("-供应商信息-")
                 copyright_info = self.get_info_list(pid, "c/supplierAjax")
@@ -455,6 +473,8 @@ class EIScan(object):
         print(pid)
         # 根据pid去查询公司信息
         self.c_data['info'] = self.get_company_c(pid, True)
+        if self.c_data['info'] is None:
+            return None
         print(self.c_data)
         self.set_redis()
         self.p_bar.update(10)
@@ -543,18 +563,19 @@ class EIScan(object):
         df1 = pd.DataFrame(res, columns=icp_names)
         df1.to_excel(xlsx, sheet_name="ICP备案信息", index=False)
         # 投资工资与比例信息
-        res = []
-        inv_names = ['公司名称', '状态', '投资比例', '数据信息']
-        for item in self.c_data['invest']:
-            csv_res = {
-                '公司名称': item['entName'],
-                '状态': item['openStatus'],
-                '投资比例': item['regRate'],
-                '数据信息': item['data']
-            }
-            res.append(csv_res)
-        df2 = pd.DataFrame(res, columns=inv_names)
-        df2.to_excel(xlsx, sheet_name="对外投资信息", index=False)
+        if self.c_data['invest']:
+            res = []
+            inv_names = ['公司名称', '状态', '投资比例', '数据信息']
+            for item in self.c_data['invest']:
+                csv_res = {
+                    '公司名称': item['entName'],
+                    '状态': item['openStatus'],
+                    '投资比例': item['regRate'],
+                    '数据信息': item['data']
+                }
+                res.append(csv_res)
+            df2 = pd.DataFrame(res, columns=inv_names)
+            df2.to_excel(xlsx, sheet_name="对外投资信息", index=False)
         # 导出APP信息
         res = []
         app_names = ["名称", "分类", "logo文字", "logo地址", "应用描述", "应用所属公司"]
@@ -572,32 +593,35 @@ class EIScan(object):
         df_app.to_excel(xlsx, sheet_name="APP信息", index=False)
 
         # 导出供应商信息
-        res = []
-        supplier_names = ["供应商", "来源", "所属公司", "日期"]
-        for item in self.c_data['info']['supplier_info']:
-            csv_res = {
-                '供应商': item['supplier'],
-                '来源': item['source'],
-                '所属公司': item['principalNameClient'],
-                '日期': item['cooperationDate']
-            }
-            res.append(csv_res)
-        df_supplier = pd.DataFrame(res, columns=supplier_names)
-        df_supplier.to_excel(xlsx, sheet_name="供应商", index=False)
+        if self.c_data['info']['supplier_info']:
+            res = []
+            supplier_names = ["供应商", "来源", "所属公司", "日期"]
+            for item in self.c_data['info']['supplier_info']:
+                csv_res = {
+                    '供应商': item['supplier'],
+                    '来源': item['source'],
+                    '所属公司': item['principalNameClient'],
+                    '日期': item['cooperationDate']
+                }
+                res.append(csv_res)
+            df_supplier = pd.DataFrame(res, columns=supplier_names)
+            df_supplier.to_excel(xlsx, sheet_name="供应商", index=False)
 
         xlsx.close()
         logger.info("导出 {} 信息完成".format(self.c_name))
 
-    def main(self, pid=None):
+    def main(self, pid=None, search_keyword=None):
         self.get_show_banner()
         logger.info("ENScan JOB Start")
         self.clear()
         # 获取关键词，判断是否命令模式
-        search_keyword = None
         self.pid = None
         if self.isCmd:
             print("==== 【命令行模式】 请输入关键词 ====")
-            search_keyword = input("")
+            if search_keyword is None:
+                search_keyword = input("")
+            else:
+                print("当前查询：{}".format(search_keyword))
         elif pid is not None:
             self.pid = pid
 
@@ -641,12 +665,27 @@ class EIScan(object):
                 p_info = self.c_data['enInfo']['legalPersonInfo']
                 for i in p_info:
                     print(i)
-                self.export()
+                if self.c_data['info']:
+                    self.export()
             # print(self.c_data)
-            self.main()
+            if self.is_rp:
+                self.main()
 
 
 if __name__ == '__main__':
     Scan = EIScan()
     Scan.isCmd = True
-    Scan.main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-k', dest='paths', help='指定批量查询关键词文本')
+    args = parser.parse_args()
+    if args.paths:
+        Scan.is_rp = False
+        paths = args.paths
+        with open(paths, "r", encoding='UTF-8') as files:
+            file_data = files.readlines()  # 读取文件
+            for fi_s in file_data:
+                fi_s = fi_s.strip('\n')
+                Scan.main(None, fi_s)
+                sleep(10)
+    else:
+        Scan.main()
