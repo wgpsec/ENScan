@@ -3,6 +3,7 @@ import argparse
 import datetime
 import json
 import logging
+import os
 from time import sleep
 
 import pandas as pd
@@ -30,15 +31,15 @@ class EIScan(object):
     def __init__(self):
         # 文件配置项
         self.user_proxy = []  # 是否添加常用代理
-        self.cookie = "BAIDUID=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; BIDUPSID=B0EA5B5A26D48D91E92ED7191B603D2B; PSTM=1591879205; BAIDUID_BFESS=B0EA5B5A26D48D915916667E2C0A2D6C:FG=1; __yjs_duid=1_05288c5d52ed09ad65fabd2cb8f272911620919713778; log_guid=8ceea695cea8bcf66f5faf514f53b8c9; _j47_ka8_=57; ZX_HISTORY=%5B%7B%22visittime%22%3A%222021-05-24+12%3A33%3A24%22%2C%22pid%22%3A%22xlTM-TogKuTwzcJnGP0jxDDknK7qURq9UQmd%22%7D%2C%7B%22visittime%22%3A%222021-05-24+10%3A53%3A31%22%2C%22pid%22%3A%22xlTM-TogKuTwT8nHWdUj1%2AFYCl0X5VQzfAmd%22%7D%5D; Hm_lvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621824750,1621934330,1621934339,1622013362; Hm_lpvt_ad52b306e1ae4557f5d3534cce8f8bbf=1622013362; _s53_d91_=93c39820170a0a5e748e1ac9ecc79371df45a908d7031a5e0e6df033fcc8068df8a85a45f59cb9faa0f164dd33ed0c72e56add5686b1e41220ccd34d45dc9598b464097149c6a9af7af5be8d893ab29007d664550a119b513036f45fe7361e1d10d6fcb515a7205ce5f65b68e4ac151ea3dd2931fd306dfbc02b6d76e0ada19f666a0b7fcc4b38461e3baec6a867ecc6d0453029a89960b767c10a9194f94fc091a36658be6a85e9712f0f3a8bbc114172a701811bb93b24e59b03a754586c80f4216036acd7c1ffa798e2f006f8bb82; _y18_s21_=f3c516a9; ab_sr=1.0.0_MzMxYWJkMDJmYjc4MThmMjMzYjhiNDQxNjhiNmEzOTk4Y2YzNDc4MmY1MTgyYWVlMGRiZTE4ZWQ1N2Q2MmUyZmJjMjYwYjQ4YjI3OTM4NDk1ODdiZThkNTQ4YjlhYmMx; __yjs_st=2_ODQ3YmM3ODc5ZDZlMTI4MTMyY2IxY2NiYjJlM2ZkZGU0MjdlMzU2NDNiMmNkNThjMjQ1NDljYzhmYTY4OWEwMDIwMGRiMWRmYjNiMjM4Y2M1MzM2NTY2MmZiODdiYmQ3NWQzYjRjN2MxNTVlMzg1NTY0MDk2NWJjYTM1NDFjOWY3ODk1YjA0MDU1ZTI1YmRmMDZjZjM0M2IyMmMzM2M4MzhlOGY4MGE2YTg4ZDhhMDA0MWFjNWMyNWY5MjhhOWMyMTcxM2Y3MmY1NjIyNzRmZDA1ZDlmZjdiN2ViOWVlZTVhZDM5Y2MzN2E1MTRlNjhmMjNkZDFhNjkzODg0ZmUwYl83X2NiYzIyMDEz"  # 是否添加Cookie信息
+        self.cookie = ""  # 是否添加Cookie信息
         # 是否开启代理
         self.is_proxy = False
         # 是否拿到分支机构详细信息，为了获取邮箱和人名信息等
         self.is_branch = False
         # 是否选出不清楚投资比例的
-        self.invest_is_rd = False
+        self.invest_is_rd = True
         # 筛选投资比例需要大于多少
-        self.invest_num = 90
+        self.invest_num = 50
         # 初始化数据
         self.isCmd = False
         self.resData = {}
@@ -274,6 +275,8 @@ class EIScan(object):
     def access_des(self, pid, url_prefix, t=0):
         url = "https://aiqicha.baidu.com/compdata/navigationListAjax?pid=" + pid
         res = self.get_req(url, url_prefix, True, is_json=True)
+        if pid == 51881537729212:
+            return None
         if res:
             res = json.loads(res)['data']
             return res
@@ -547,6 +550,8 @@ class EIScan(object):
 
     def export(self):
         logger.info("导出 {} 信息".format(self.c_name))
+        if not os.path.exists("res"):
+            os.mkdir("res")
         xlsx = pd.ExcelWriter(r"res/{}-{}.xlsx".format(datetime.date.today(), self.c_name))
         res = []
         # ICP备案信息
@@ -659,9 +664,9 @@ class EIScan(object):
             # print(self.enInfo)
             print("!!!!!!!!!!!!Email!!!!!!!!!!!!!!!1")
             if self.c_data:
-                email_info = self.c_data['enInfo']['emailInfo']
-                for item in email_info:
-                    print(item)
+                # email_info = self.c_data['enInfo']['emailInfo']
+                # for item in email_info:
+                #     print(item)
                 p_info = self.c_data['enInfo']['legalPersonInfo']
                 for i in p_info:
                     print(i)
@@ -686,6 +691,6 @@ if __name__ == '__main__':
             for fi_s in file_data:
                 fi_s = fi_s.strip('\n')
                 Scan.main(None, fi_s)
-                sleep(10)
+                sleep(5)
     else:
         Scan.main()

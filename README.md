@@ -8,7 +8,7 @@
 
 ## 背景
 
-本项目为 [狼组信息化平台](https://plat.wgpsec.org) 功能项目，该项目内部开源
+本项目为 [狼组信息化平台](https://plat.wgpsec.org) 功能项目，该项目开源
 
 程序主要对[百度爱企查](aiqicha.baidu.com) API和接口进行封装可获取
 
