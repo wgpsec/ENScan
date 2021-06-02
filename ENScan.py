@@ -1,4 +1,7 @@
 #!env python3
+# Keac
+# admin@wgpsec.org
+# WgpSec Team
 import argparse
 import datetime
 import json
@@ -31,16 +34,16 @@ class EIScan(object):
     def __init__(self):
         # 文件配置项
         self.user_proxy = []  # 是否添加常用代理
-        self.cookie = ""  # 是否添加Cookie信息
-        # 是否开启代理
+        self.cookie = ""  # 是否添加Cookie信息（打开浏览器，打开爱企查，复制cookie）
+        # 是否开启代理 (速度变慢，但提高稳定性)
         self.is_proxy = False
         # 是否拿到分支机构详细信息，为了获取邮箱和人名信息等
         self.is_branch = False
-        # 是否选出不清楚投资比例的
-        self.invest_is_rd = True
+        # 是否选出不清楚投资比例的（出现误报较高）
+        self.invest_is_rd = False
         # 筛选投资比例需要大于多少
         self.invest_num = 50
-        # 初始化数据
+        # ==== 初始化数据 ====
         self.isCmd = False
         self.resData = {}
         self.c_data = {}
@@ -80,7 +83,7 @@ class EIScan(object):
              |______|_| \_|_____/ \___\__,_|_| |_|
                                             
                 ENScan 企业资产快速收集工具 {}
-                  WgpSec Team
+                  WgpSec Team @Keac
                 www.wgpsec.org
                 \033[0m
                 """.format(self.version))

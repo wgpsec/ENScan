@@ -41,7 +41,7 @@
 
    `python ENScan.py -k keyword.txt` keyword.txt 为你自己制定的企业关键词，每行一个
 
-若使用出现 “【风险校验】需要更新Cookie” 信息需要使用浏览器打开https://aiqicha.baidu.com/ 滑动验证码校验后复制所有COOKIE信息替换 self.cookie
+若使用出现 “【风险校验】需要更新Cookie” 信息需要使用浏览器打开https://aiqicha.baidu.com/ 滑动验证码校验后复制所有COOKIE信息替换脚本中的 self.cookie
 
 `self.invest_is_rd = False`  是否选出不清楚投资比例的，比如未公示投资多少的，开启会增加发现几率，但可能会不对应
 
