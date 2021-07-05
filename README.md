@@ -27,6 +27,8 @@
 
 ## 快速使用
 
+<iframe src="//player.bilibili.com/player.html?bvid=BV1Nv411H7CN&page=1" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"> </iframe>
+
 1. 安装依赖 (部分依赖有点问题，需要手动安装下)
 
    `pip install -r requirements.txt`
