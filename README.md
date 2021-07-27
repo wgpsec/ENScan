@@ -1,9 +1,6 @@
 <h1 align="center">ENScan 🛠</h1>
 
-<p>
-  <img src="https://img.shields.io/badge/Language-Python3-blue" />
-  <img src="https://img.shields.io/badge/Version-1.0-blue" />
-</p>
+![ENScan](https://socialify.git.ci/wgpsec/ENScan/image?description=1&forks=1&issues=1&language=1&logo=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F16091665&owner=1&pattern=Circuit%20Board&pulls=1&stargazers=1&theme=Dark)
 
 
 ## 背景
