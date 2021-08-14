@@ -38,7 +38,7 @@ class EIScan(object):
         # 是否开启代理 (速度变慢，但提高稳定性)
         self.is_proxy = False
         # 是否拿到分支机构详细信息，为了获取邮箱和人名信息等
-        self.is_branch = True
+        self.is_branch = False
         # 是否选出不清楚投资比例的（出现误报较高）
         self.invest_is_rd = False
         # 筛选投资比例需要大于多少
@@ -97,7 +97,7 @@ class EIScan(object):
 
     def build_headers(self, referer):
         if not referer:
-            referer = 'https://www.baidu.com'
+            referer = 'https://aiqicha.baidu.com/'
         user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
             '(KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36',
@@ -315,7 +315,6 @@ class EIScan(object):
         item_detail = self.access_pid(pid, "")
         item_detail['newTabs'] = self.access_des(pid, "")
         info = {}
-        print(item_detail)
         if item_detail:
             # 基本信息获取
             info["email"] = item_detail["email"]
@@ -336,10 +335,10 @@ class EIScan(object):
             info["branch"] = item_detail['newTabs'][0]['children'][12]['total']
             info["icpNum"] = item_detail['newTabs'][2 + l]['children'][0]['total']
             info["copyrightNum"] = item_detail['newTabs'][2 + l]['children'][3]['total']
-            info["microblog"] = item_detail['newTabs'][4 + l]['children'][7]['total']
-            info["wechatoa"] = item_detail['newTabs'][4 + l]['children'][8]['total']
-            info["appinfo"] = item_detail['newTabs'][4 + l]['children'][9]['total']
-            info["supplier"] = item_detail['newTabs'][4 + l]['children'][18]['total']
+            info["microblog"] = item_detail['newTabs'][4 + l]['children'][10]['total']
+            info["wechatoa"] = item_detail['newTabs'][4 + l]['children'][11]['total']
+            info["appinfo"] = item_detail['newTabs'][4 + l]['children'][12]['total']
+            info["supplier"] = item_detail['newTabs'][4 + l]['children'][22]['total']
             email_info = {
                 # "entName": info["entName"],
                 "email": info["email"],
