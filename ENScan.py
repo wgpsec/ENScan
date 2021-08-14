@@ -38,15 +38,16 @@ class EIScan(object):
         # 是否开启代理 (速度变慢，但提高稳定性)
         self.is_proxy = False
         # 是否拿到分支机构详细信息，为了获取邮箱和人名信息等
-        self.is_branch = False
+        self.is_branch = True
         # 是否选出不清楚投资比例的（出现误报较高）
         self.invest_is_rd = False
         # 筛选投资比例需要大于多少
-        self.invest_num = 50
+        self.invest_num = 90
         # ==== 初始化数据 ====
         self.isCmd = False
         self.resData = {}
         self.c_data = {}
+        self.c_data['branch_list']={}
         self.p_bar = None
         self.pid = None
         self.c_name = None
@@ -314,6 +315,7 @@ class EIScan(object):
         item_detail = self.access_pid(pid, "")
         item_detail['newTabs'] = self.access_des(pid, "")
         info = {}
+        print(item_detail)
         if item_detail:
             # 基本信息获取
             info["email"] = item_detail["email"]
@@ -327,10 +329,11 @@ class EIScan(object):
                 l = 1
             else:
                 l = 0
+            print(l)
             # 根据信息顺序数字判断
-            info["invest"] = item_detail['newTabs'][0 + l]['children'][7]['total']
-            info["hold"] = item_detail['newTabs'][0 + l]['children'][8]['total']
-            info["branch"] = item_detail['newTabs'][0 + l]['children'][12]['total']
+            info["invest"] = item_detail['newTabs'][0]['children'][7]['total']
+            info["hold"] = item_detail['newTabs'][0]['children'][8]['total']
+            info["branch"] = item_detail['newTabs'][0]['children'][12]['total']
             info["icpNum"] = item_detail['newTabs'][2 + l]['children'][0]['total']
             info["copyrightNum"] = item_detail['newTabs'][2 + l]['children'][3]['total']
             info["microblog"] = item_detail['newTabs'][4 + l]['children'][7]['total']
@@ -494,7 +497,8 @@ class EIScan(object):
             print(s['entName'] + " " + s['openStatus'])
             # 是否拿到分支机构的详细信息
             if self.is_branch:
-                self.c_data['branch_list'][s['pid']] = self.get_company_c(s['pid'])
+                self.get_company_c(s['pid'])
+                # self.c_data['branch_list'][s['pid']] = self.get_company_c(s['pid'])
         self.p_bar.update(10)
         # print("===控股公司===")
         # holds_info_data = []
@@ -567,6 +571,8 @@ class EIScan(object):
                 '公司名称': item['entName'],
                 'ICP备案号': item['icpNo'],
             }
+            with open("test.txt", "a") as f:
+                f.write(item['domain']+"\n")
             res.append(csv_res)
         df1 = pd.DataFrame(res, columns=icp_names)
         df1.to_excel(xlsx, sheet_name="ICP备案信息", index=False)
