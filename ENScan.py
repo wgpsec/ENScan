@@ -690,6 +690,7 @@ if __name__ == '__main__':
     Scan.isCmd = True
     parser = argparse.ArgumentParser()
     parser.add_argument('-k', dest='paths', help='指定批量查询关键词文本')
+    parser.add_argument('-s', dest='key', help='指定查询关键词文本')
     args = parser.parse_args()
     if args.paths:
         Scan.is_rp = False
@@ -700,5 +701,7 @@ if __name__ == '__main__':
                 fi_s = fi_s.strip('\n')
                 Scan.main(None, fi_s)
                 sleep(5)
+    elif  args.key:
+        Scan.main(None, args.key)
     else:
         Scan.main()
