@@ -225,7 +225,6 @@ class EIScan(object):
 
     def parse_index(self, content, flag=True):
         tag_2 = '/* eslint-enable */</script><script data-app'
-        # tag_2 = 'if(window.pageData.result.isDidiwei){window.location.href='
         tag_1 = 'window.pageData ='
         idx_1 = content.find(tag_1)
         idx_2 = content.find(tag_2)
