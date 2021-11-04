@@ -47,7 +47,7 @@ class EIScan(object):
         self.isCmd = False
         self.resData = {}
         self.c_data = {}
-        self.c_data['branch_list']={}
+        self.c_data['branch_list'] = {}
         self.p_bar = None
         self.pid = None
         self.c_name = None
@@ -70,7 +70,10 @@ class EIScan(object):
             "icpList": [],
             "emailInfo": [],
             "appInfo": [],
+            "microblog": [],
+            "wechatoa": [],
             "socialInfo": [],
+            "enterprisejob": [],
             "legalPersonInfo": []
         }
 
@@ -236,7 +239,9 @@ class EIScan(object):
             mystr = mystr.replace("window.isSpider = null;", "")
             mystr = mystr.replace("window.updateTime = null;", "")
             mystr = mystr.replace(" ", "")
-            mystr = mystr.replace("if(window.pageData.result.isDidiwei){window.location.href=`/login?u=${encodeURIComponent(window.location.href)}`}", "")
+            mystr = mystr.replace(
+                "if(window.pageData.result.isDidiwei){window.location.href=`/login?u=${encodeURIComponent(window.location.href)}`}",
+                "")
             mystr = mystr.replace(" ", "")
             len_str = len(mystr)
             if mystr[len_str - 1] == ';':
@@ -304,7 +309,9 @@ class EIScan(object):
             mystr = mystr.replace("window.isSpider = null;", "")
             mystr = mystr.replace("window.updateTime = null;", "")
             mystr = mystr.replace(" ", "")
-            mystr = mystr.replace("if(window.pageData.result.isDidiwei){window.location.href=`/login?u=${encodeURIComponent(window.location.href)}`}", "")
+            mystr = mystr.replace(
+                "if(window.pageData.result.isDidiwei){window.location.href=`/login?u=${encodeURIComponent(window.location.href)}`}",
+                "")
             mystr = mystr.replace(" ", "")
             # mystr = content[idx_1 + len(tag_1): idx_2].strip()
             len_str = len(mystr)
@@ -343,6 +350,7 @@ class EIScan(object):
             info["wechatoa"] = item_detail['newTabs'][4 + l]['children'][11]['total']
             info["appinfo"] = item_detail['newTabs'][4 + l]['children'][12]['total']
             info["supplier"] = item_detail['newTabs'][4 + l]['children'][22]['total']
+            info["enterprisejob"] = item_detail['newTabs'][4 + l]['children'][26]['total']
             email_info = {
                 # "entName": info["entName"],
                 "email": info["email"],
@@ -432,6 +440,8 @@ class EIScan(object):
                 info_res = self.get_info_list(pid, "c/microblogAjax")
                 c_info['micro_blog'] = info_res
                 for info_item in info_res:
+                    info_item['entName'] = s_info['entName']
+                    self.enInfo["microblog"].append(info_item)
                     print(info_item)
             if flag:
                 self.c_data['info'] = c_info
@@ -441,7 +451,27 @@ class EIScan(object):
                 info_res = self.get_info_list(pid, "c/wechatoaAjax")
                 c_info['wechat_mp'] = info_res
                 for info_item in info_res:
+                    info_item['entName'] = s_info['entName']
+                    self.enInfo["wechatoa"].append(info_item)
                     print(info_item)
+
+            if s_info['enterprisejob'] != "" and s_info['enterprisejob'] > 0:
+                print("-招聘信息-")
+                info_res = self.get_info_list(pid, "c/enterprisejobAjax")
+                c_info['enterprisejob'] = info_res
+                for info_item in info_res:
+                    # 辣鸡爱企查，招聘详情都一样的。。。
+                    # url_prefix = 'https://www.baidu.com/'
+                    # url = "https://aiqicha.baidu.com" + info_item["detailUrl"]
+                    # content = self.get_req(url, url_prefix, True)
+                    # res = self.parse_detail(content)
+                    # print(res['tabData']['jobDesc'])
+                    # info_item['desc'] = res['tabData']['jobDesc']
+                    info_item['desc'] = ""
+                    info_item['entName'] = s_info['entName']
+                    self.enInfo["enterprisejob"].append(info_item)
+                    print(info_item)
+
             if flag:
                 self.c_data['info'] = c_info
                 self.set_redis()
@@ -575,7 +605,7 @@ class EIScan(object):
                 'ICP备案号': item['icpNo'],
             }
             with open("test.txt", "a") as f:
-                f.write(item['domain']+"\n")
+                f.write(item['domain'] + "\n")
             res.append(csv_res)
         df1 = pd.DataFrame(res, columns=icp_names)
         df1.to_excel(xlsx, sheet_name="ICP备案信息", index=False)
@@ -609,6 +639,35 @@ class EIScan(object):
         df_app = pd.DataFrame(res, columns=app_names)
         df_app.to_excel(xlsx, sheet_name="APP信息", index=False)
 
+        # 导出微博信息
+        res = []
+        app_names = ["logo", "微博昵称", "微博链接"]
+        for item in self.c_data['enInfo']['microblog']:
+            csv_res = {
+                'logo': item['logo'],
+                '微博昵称': item['nickname'],
+                '微博链接': item['weiboLink'],
+            }
+            res.append(csv_res)
+        df_app = pd.DataFrame(res, columns=app_names)
+        df_app.to_excel(xlsx, sheet_name="微博信息", index=False)
+
+        # 导出微信公众号信息
+        res = []
+        app_names = ["名称", "公众号ID", "描述", "LOGO", "二维码", "归属公司"]
+        for item in self.c_data['enInfo']['wechatoa']:
+            csv_res = {
+                '名称': item['wechatName'],
+                '公众号ID': item['wechatId'],
+                '描述': item['wechatIntruduction'],
+                'LOGO': item['wechatLogo'],
+                '二维码': item['qrcode'],
+                '归属公司': item['principalName'],
+            }
+            res.append(csv_res)
+        df_app = pd.DataFrame(res, columns=app_names)
+        df_app.to_excel(xlsx, sheet_name="微信公众号", index=False)
+
         # 导出供应商信息
         if self.c_data['info']['supplier_info']:
             res = []
@@ -623,6 +682,22 @@ class EIScan(object):
                 res.append(csv_res)
             df_supplier = pd.DataFrame(res, columns=supplier_names)
             df_supplier.to_excel(xlsx, sheet_name="供应商", index=False)
+
+            # 导出招聘信息
+            res = []
+            app_names = ["职位名称", "工作地点", "学历要求", "发布日期", "招聘详情", "详情链接"]
+            for item in self.c_data['enInfo']['enterprisejob']:
+                csv_res = {
+                    '职位名称': item['jobTitle'],
+                    '工作地点': item['location'],
+                    '学历要求': item['education'],
+                    '发布日期': item['publishDate'],
+                    '招聘详情': item['desc'],
+                    '详情链接': "https://aiqicha.baidu.com" + item['detailUrl'],
+                }
+                res.append(csv_res)
+            df_app = pd.DataFrame(res, columns=app_names)
+            df_app.to_excel(xlsx, sheet_name="招聘信息", index=False)
 
         xlsx.close()
         logger.info("导出 {} 信息完成".format(self.c_name))
@@ -705,7 +780,7 @@ if __name__ == '__main__':
                 fi_s = fi_s.strip('\n')
                 Scan.main(None, fi_s)
                 sleep(5)
-    elif  args.key:
+    elif args.key:
         Scan.main(None, args.key)
     else:
         Scan.main()
