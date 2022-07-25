@@ -3,6 +3,8 @@
 ![ENScan](https://socialify.git.ci/wgpsec/ENScan/image?description=1&forks=1&issues=1&language=1&logo=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F16091665&owner=1&pattern=Circuit%20Board&pulls=1&stargazers=1&theme=Dark)
 
 
+** 项目已暂停维护，欢迎使用ENScanGo https://github.com/wgpsec/ENScan_GO **
+
 ## 背景
 
 本项目为 [狼组信息化平台](https://plat.wgpsec.org) 功能项目，该项目开源
