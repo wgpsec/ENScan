@@ -120,7 +120,7 @@ class EIScan(object):
             'Accept-Language': 'zh-Hans-CN, zh-Hans; q=0.5',
             'Connection': 'Keep-Alive',
             'Cookie': self.cookie,
-            'Referer': referer,
+            'Referer': "https://aifanfan.baidu.com/",
             'User-Agent': ua
         }
         return headers
@@ -227,8 +227,8 @@ class EIScan(object):
             return None
 
     def parse_index(self, content, flag=True):
-        tag_2 = '/* eslint-enable */</script><script data-app'
         tag_1 = 'window.pageData ='
+        tag_2 = 'window.isSpider ='
         idx_1 = content.find(tag_1)
         idx_2 = content.find(tag_2)
         # 判断关键词区间中的JSON数据来进行匹配
@@ -243,6 +243,7 @@ class EIScan(object):
                 "if(window.pageData.result.isDidiwei){window.location.href=`/login?u=${encodeURIComponent(window.location.href)}`}",
                 "")
             mystr = mystr.replace(" ", "")
+
             len_str = len(mystr)
             if mystr[len_str - 1] == ';':
                 mystr = mystr[0:len_str - 1]
@@ -251,7 +252,6 @@ class EIScan(object):
             # 判断数据
             if flag:
                 return j["result"]
-
             if len(j["result"]["resultList"]) > 0:
                 item = j["result"]["resultList"][0]
                 return item
@@ -501,6 +501,7 @@ class EIScan(object):
         url_prefix = 'https://www.baidu.com/'
         url_a = 'https://aiqicha.baidu.com/s?q=' + company + '&t=0'
         content = self.get_req(url_a, url_prefix, False)
+        # print(content)
         if content:
             item = self.parse_index(content, False)
         if t > 3:
