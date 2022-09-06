@@ -120,7 +120,7 @@ class EIScan(object):
             'Accept-Language': 'zh-Hans-CN, zh-Hans; q=0.5',
             'Connection': 'Keep-Alive',
             'Cookie': self.cookie,
-            'Referer': "https://aifanfan.baidu.com/",
+            'Referer': referer,
             'User-Agent': ua
         }
         return headers
