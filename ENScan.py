@@ -377,18 +377,21 @@ class EIScan(object):
             data = res_data['data']
             if types == "relations/relationalMapAjax":
                 data = data['investRecordData']
-            page_count = data['pageCount']
-            if page_count > 1:
-                proxy_bar = tqdm(total=page_count, desc="【INFO_LIST】",
-                                 bar_format='{l_bar}%s{bar}%s{r_bar}' % (Fore.BLUE, Fore.RESET))
-                for t in range(1, page_count + 1):
-                    proxy_bar.update(1)
-                    req_url = url + "&p=" + str(t) + "&page=" + str(t)
-                    content = self.get_req(req_url, url_prefix, True, True)
-                    res_s_data = json.loads(content)['data']
-                    list_data.extend(res_s_data['list'])
-                proxy_bar.close()
-            else:
+            try:
+                page_count = data['pageCount']
+                if page_count > 1:
+                    proxy_bar = tqdm(total=page_count, desc="【INFO_LIST】",
+                                    bar_format='{l_bar}%s{bar}%s{r_bar}' % (Fore.BLUE, Fore.RESET))
+                    for t in range(1, page_count + 1):
+                        proxy_bar.update(1)
+                        req_url = url + "&p=" + str(t) + "&page=" + str(t)
+                        content = self.get_req(req_url, url_prefix, True, True)
+                        res_s_data = json.loads(content)['data']
+                        list_data.extend(res_s_data['list'])
+                    proxy_bar.close()
+                else:
+                    list_data = data['list']
+            except:
                 list_data = data['list']
         return list_data
 
