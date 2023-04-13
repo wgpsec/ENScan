@@ -1,6 +1,6 @@
 <h1 align="center">ENScan 🛠</h1>
 
-**建议使用ENScanGo**
+**本项目已停止维护，建议使用ENScanGo**
 https://github.com/wgpsec/ENScan_GO
 
 
